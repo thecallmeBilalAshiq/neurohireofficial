@@ -357,6 +357,12 @@ Instructions:
 9. If a field is not found, use empty string "" for strings, empty object {} for education, or empty array [] for skills
 10. Return ONLY the JSON object, no additional text or explanation
 
+CRITICAL: Invalid CV Detection
+- If the provided text is NOT a valid CV (e.g., random text, corrupted content, non-CV document, insufficient information, or clearly not a resume/CV), you MUST return an empty JSON object: {}
+- A valid CV should contain at least basic personal information (name, email, or phone) and some professional/educational content
+- If the text appears to be a CV but is missing critical information and cannot be properly parsed, return an empty JSON object: {}
+- Only return structured data if you can confidently extract meaningful information from a legitimate CV document
+
 CV Text:
 ${cvText.substring(0, 8000)}`;
 
@@ -418,6 +424,37 @@ ${cvText.substring(0, 8000)}`;
         }
         return res.status(500).json({ 
           error: 'Failed to parse extracted data. Please try again.' 
+        });
+      }
+
+      // Check if extracted data is empty (invalid CV)
+      // If the LLM returned an empty object or all fields are empty/missing, treat as invalid CV
+      const isEmpty = !extractedData || 
+        Object.keys(extractedData).length === 0 ||
+        (
+          (!extractedData.firstName || extractedData.firstName === '') &&
+          (!extractedData.lastName || extractedData.lastName === '') &&
+          (!extractedData.email || extractedData.email === '') &&
+          (!extractedData.phone || extractedData.phone === '') &&
+          (!extractedData.address || extractedData.address === '') &&
+          (!extractedData.experience || extractedData.experience === '') &&
+          (!extractedData.skills || (Array.isArray(extractedData.skills) && extractedData.skills.length === 0)) &&
+          (!extractedData.education || 
+            (typeof extractedData.education === 'object' && 
+             (!extractedData.education.university || extractedData.education.university === '') &&
+             (!extractedData.education.degree || extractedData.education.degree === ''))) &&
+          (!extractedData.certificates || extractedData.certificates === '')
+        );
+
+      if (isEmpty) {
+        // Clean up uploaded file
+        if (fs.existsSync(cvPath)) {
+          fs.unlinkSync(cvPath);
+        }
+        // Return empty JSON to indicate invalid CV
+        return res.json({
+          success: true,
+          extractedData: {}
         });
       }
 

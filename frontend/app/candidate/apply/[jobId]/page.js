@@ -115,6 +115,32 @@ function JobApplicationContent() {
       if (result.success && result.data.extractedData) {
         const extracted = result.data.extractedData;
         
+        // Check if extracted data is empty (invalid CV)
+        const isEmpty = !extracted || 
+          Object.keys(extracted).length === 0 ||
+          (
+            (!extracted.firstName || extracted.firstName === '') &&
+            (!extracted.lastName || extracted.lastName === '') &&
+            (!extracted.email || extracted.email === '') &&
+            (!extracted.phone || extracted.phone === '') &&
+            (!extracted.address || extracted.address === '') &&
+            (!extracted.experience || extracted.experience === '') &&
+            (!extracted.skills || (Array.isArray(extracted.skills) && extracted.skills.length === 0)) &&
+            (!extracted.education || 
+              (typeof extracted.education === 'object' && 
+               (!extracted.education.university || extracted.education.university === '') &&
+               (!extracted.education.degree || extracted.education.degree === ''))) &&
+            (!extracted.certificates || extracted.certificates === '')
+          );
+
+        if (isEmpty) {
+          // Show popup for invalid CV
+          toast.error("Please upload a valid CV or fill the form manually. The uploaded file does not appear to be a valid CV.", {
+            autoClose: 6000,
+          });
+          return;
+        }
+        
         // Store original extracted data structure (for backend scoring)
         setExtractedData(extracted);
         
