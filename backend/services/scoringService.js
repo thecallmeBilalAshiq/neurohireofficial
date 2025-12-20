@@ -306,6 +306,68 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 }
 
 /**
+ * Score candidate's languages using GPT-4o
+ */
+async function scoreLanguages(languages, jobDescription) {
+  if (!model) {
+    throw new Error('LLM service not available');
+  }
+
+  // Handle languages as array or string
+  let languagesText = '';
+  if (Array.isArray(languages)) {
+    languagesText = languages.join(', ');
+  } else if (typeof languages === 'string') {
+    languagesText = languages;
+  } else {
+    languagesText = '';
+  }
+
+  const prompt = `Rate the following candidate's languages on a scale of 0-10 for relevance and value to the job requirements provided below. Score based on how well the languages align with the job's needs, number of languages, and proficiency levels.
+
+Job Requirements: ${jobDescription}
+
+Few-Shot Examples for Languages:
+- Candidate Languages: "English (Basic)". Job Req: "English fluency required." Score: 3 - Basic English may not meet fluency requirement, limited value.
+- Candidate Languages: "English (Fluent), Urdu (Native), Spanish (Conversational)". Job Req: "Multilingual preferred, English required." Score: 9 - Multiple languages including required English, high value for international roles.
+- Candidate Languages: "English (Native), French (Fluent)". Job Req: "English required, French preferred." Score: 10 - Perfect match with both required and preferred languages at high proficiency.
+- Candidate Languages: "None listed." Job Req: "English required." Score: 0 - No languages listed, cannot assess.
+
+Scoring Guidelines:
+- 10: All required languages at high proficiency (Native/Fluent)
+- 8-9: Required languages present, multiple languages, good proficiency
+- 6-7: Required languages present but basic proficiency, or some relevant languages
+- 4-5: Some relevant languages but missing required ones, or very basic proficiency
+- 2-3: Limited languages, low proficiency, or minimal relevance
+- 0-1: No languages listed or completely irrelevant
+
+Now evaluate this candidate's languages: ${languagesText || 'No languages listed'}
+
+IMPORTANT: You must return ONLY a valid JSON object in this exact format with no additional text:
+{"score": <integer between 0 and 10>}`;
+
+  try {
+    const { error, output } = await model.run([
+      { role: "user", content: prompt }
+    ]);
+
+    if (error) {
+      console.error('GPT-4o Error for languages scoring:', error);
+      return 0;
+    }
+
+    const outputText = extractOutputText(output);
+    console.log('Raw output for languages scoring:', outputText.substring(0, 200));
+    
+    return parseScoreFromOutput(outputText, 'languages');
+  } catch (error) {
+    console.error('Error scoring languages:', error);
+    console.error('Error stack:', error.stack);
+    return 0;
+  }
+}
+
+/**
  * Score candidate's education using GPT-4o
  */
 async function scoreEducation(education, jobDescription) {
@@ -428,20 +490,20 @@ function calculateTotalScore(scores, weightage) {
   }
 
   // Normalize weights to sum to 100
-  // Weightage may use 'skills', 'experience', 'education', 'projects', 'certificates'
-  // Note: JobPost model may also have 'language' weightage, but we're not using it here
+  // Weightage may use 'skills', 'experience', 'education', 'projects', 'certificates', 'languages'
   const totalWeight = (weightage.skills || 0) + (weightage.experience || 0) + 
                      (weightage.education || 0) + (weightage.projects || 0) + 
-                     (weightage.certificates || 0);
+                     (weightage.certificates || 0) + (weightage.languages || 0);
   
   if (totalWeight === 0) {
     // Use default weights if not provided
     weightage = {
-      skills: 40,
-      experience: 30,
+      skills: 35,
+      experience: 25,
       education: 20,
-      projects: 15,
-      certificates: 5
+      projects: 12,
+      certificates: 5,
+      languages: 3
     };
   } else if (totalWeight !== 100) {
     // Normalize to 100 if sum is not 100
@@ -451,7 +513,8 @@ function calculateTotalScore(scores, weightage) {
       experience: (weightage.experience || 0) * factor,
       education: (weightage.education || 0) * factor,
       projects: (weightage.projects || 0) * factor,
-      certificates: (weightage.certificates || 0) * factor
+      certificates: (weightage.certificates || 0) * factor,
+      languages: (weightage.languages || 0) * factor
     };
   }
 
@@ -460,7 +523,8 @@ function calculateTotalScore(scores, weightage) {
     (scores.experience * ((weightage.experience || 0) / 100)) +
     (scores.education * ((weightage.education || 0) / 100)) +
     (scores.projects * ((weightage.projects || 0) / 100)) +
-    (scores.certificates * ((weightage.certificates || 0) / 100));
+    (scores.certificates * ((weightage.certificates || 0) / 100)) +
+    (scores.languages * ((weightage.languages || 0) / 100));
 
   return Math.round(totalScore * 10) / 10; // Round to 1 decimal place
 }
@@ -511,12 +575,21 @@ async function scoreCandidate(application, jobPost) {
       skills = '';
     }
     
+    // Handle languages - could be array or string
+    let languages = candidateData.languages || [];
+    if (typeof languages === 'string' && languages) {
+      languages = languages.split(',').map(l => l.trim()).filter(l => l);
+    } else if (!Array.isArray(languages)) {
+      languages = [];
+    }
+    
     const requiredSkills = jobPost.skills || [];
 
     console.log('Scoring components:');
     console.log('- Experience:', experience ? experience.substring(0, 50) + '...' : 'empty');
     console.log('- Projects:', projects ? projects.substring(0, 50) + '...' : 'empty');
     console.log('- Skills:', skills);
+    console.log('- Languages:', languages);
     console.log('- Certificates:', certificates ? certificates.substring(0, 50) + '...' : 'empty');
     console.log('- Education:', education);
     console.log('- Required Skills:', requiredSkills);
@@ -547,13 +620,18 @@ async function scoreCandidate(application, jobPost) {
     console.log('Starting to score education...');
     const educationScore = await scoreEducation(education, jobDescription);
     console.log('Education score:', educationScore);
+    
+    console.log('Starting to score languages...');
+    const languagesScore = await scoreLanguages(languages, jobDescription);
+    console.log('Languages score:', languagesScore);
 
     const scores = {
       experience: experienceScore,
       projects: projectsScore,
       skills: skillsScore,
       certificates: certificatesScore,
-      education: educationScore
+      education: educationScore,
+      languages: languagesScore
     };
 
     // Calculate total score using job weightage
@@ -573,6 +651,7 @@ async function scoreCandidate(application, jobPost) {
       skills: 0,
       certificates: 0,
       education: 0,
+      languages: 0,
       total: 0
     };
   }
@@ -585,6 +664,7 @@ module.exports = {
   scoreCertificates,
   scoreSkills,
   scoreEducation,
+  scoreLanguages,
   calculateTotalScore
 };
 

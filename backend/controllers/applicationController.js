@@ -123,11 +123,12 @@ exports.submitApplication = async (req, res) => {
     if (!jobPost.skills) jobPost.skills = [];
     if (!jobPost.weightage || typeof jobPost.weightage !== 'object') {
       jobPost.weightage = {
-        skills: 40,
-        experience: 30,
+        skills: 35,
+        experience: 25,
         education: 20,
-        projects: 15,
-        certificates: 5
+        projects: 12,
+        certificates: 5,
+        languages: 3
       };
     }
 
@@ -190,43 +191,74 @@ exports.submitApplication = async (req, res) => {
       }
     }
     
-    // If no extractedData, build it from formData
-    if (!extractedData) {
-      // Convert skills string to array if needed
-      let skillsData = parsedFormData.skills || '';
-      if (typeof skillsData === 'string' && skillsData) {
-        skillsData = skillsData.split(',').map(s => s.trim()).filter(s => s);
+      // If no extractedData, build it from formData
+      if (!extractedData) {
+        // Convert skills string to array if needed
+        let skillsData = parsedFormData.skills || '';
+        if (typeof skillsData === 'string' && skillsData) {
+          skillsData = skillsData.split(',').map(s => s.trim()).filter(s => s);
+        }
+        
+        // Convert languages string to array if needed
+        let languagesData = parsedFormData.languages || '';
+        if (typeof languagesData === 'string' && languagesData) {
+          languagesData = languagesData.split(',').map(l => l.trim()).filter(l => l);
+        }
+        
+        // Keep education as object if manually entered, include CGPA
+        let educationData = parsedFormData.education || '';
+        if (typeof educationData === 'string' && educationData) {
+          // If education is a string, try to create an object with CGPA
+          educationData = {
+            university: '',
+            degree: educationData,
+            dateOfCompletion: '',
+            cgpa: parsedFormData.cgpa || ''
+          };
+        } else if (typeof educationData === 'object' && educationData !== null) {
+          // If it's already an object, ensure CGPA is included
+          if (!educationData.cgpa && parsedFormData.cgpa) {
+            educationData.cgpa = parsedFormData.cgpa;
+          }
+        }
+        
+        extractedData = {
+          firstName: parsedFormData.firstName || '',
+          lastName: parsedFormData.lastName || '',
+          email: parsedFormData.email || '',
+          phone: parsedFormData.phone || '',
+          address: parsedFormData.address || '',
+          education: educationData,
+          experience: parsedFormData.experience || '',
+          projects: parsedFormData.projects || '',
+          skills: skillsData, // Array format
+          languages: languagesData, // Array format
+          certificates: parsedFormData.certificates || ''
+        };
+      } else {
+        // Ensure extractedData has proper structure
+        // Convert skills to array if it's a string
+        if (extractedData.skills && typeof extractedData.skills === 'string') {
+          extractedData.skills = extractedData.skills.split(',').map(s => s.trim()).filter(s => s);
+        } else if (!Array.isArray(extractedData.skills)) {
+          extractedData.skills = [];
+        }
+        
+        // Convert languages to array if it's a string
+        if (extractedData.languages && typeof extractedData.languages === 'string') {
+          extractedData.languages = extractedData.languages.split(',').map(l => l.trim()).filter(l => l);
+        } else if (!Array.isArray(extractedData.languages)) {
+          extractedData.languages = [];
+        }
+        
+        // Ensure education object has all fields including CGPA
+        if (extractedData.education && typeof extractedData.education === 'object' && extractedData.education !== null) {
+          if (!extractedData.education.university) extractedData.education.university = '';
+          if (!extractedData.education.degree) extractedData.education.degree = '';
+          if (!extractedData.education.dateOfCompletion) extractedData.education.dateOfCompletion = '';
+          if (!extractedData.education.cgpa) extractedData.education.cgpa = '';
+        }
       }
-      
-      // Keep education as string if manually entered
-      extractedData = {
-        firstName: parsedFormData.firstName || '',
-        lastName: parsedFormData.lastName || '',
-        email: parsedFormData.email || '',
-        phone: parsedFormData.phone || '',
-        address: parsedFormData.address || '',
-        education: parsedFormData.education || '', // String format for manual entry
-        experience: parsedFormData.experience || '',
-        skills: skillsData, // Array format
-        certificates: parsedFormData.certificates || ''
-      };
-    } else {
-      // Ensure extractedData has proper structure
-      // Convert skills to array if it's a string
-      if (extractedData.skills && typeof extractedData.skills === 'string') {
-        extractedData.skills = extractedData.skills.split(',').map(s => s.trim()).filter(s => s);
-      } else if (!Array.isArray(extractedData.skills)) {
-        extractedData.skills = [];
-      }
-      
-      // Ensure education object has all fields
-      if (extractedData.education && typeof extractedData.education === 'object' && extractedData.education !== null) {
-        if (!extractedData.education.university) extractedData.education.university = '';
-        if (!extractedData.education.degree) extractedData.education.degree = '';
-        if (!extractedData.education.dateOfCompletion) extractedData.education.dateOfCompletion = '';
-        if (!extractedData.education.cgpa) extractedData.education.cgpa = '';
-      }
-    }
 
     const application = new Application({
       jobPost: jobId,
@@ -239,8 +271,11 @@ exports.submitApplication = async (req, res) => {
         phone: parsedFormData.phone || '',
         address: parsedFormData.address || '',
         education: parsedFormData.education || '',
+        cgpa: parsedFormData.cgpa || '',
         experience: parsedFormData.experience || '',
+        projects: parsedFormData.projects || '',
         skills: parsedFormData.skills || '',
+        languages: parsedFormData.languages || '',
         certificates: parsedFormData.certificates || ''
       },
       extractedData: extractedData,
@@ -276,6 +311,7 @@ exports.submitApplication = async (req, res) => {
         skills: 0,
         certificates: 0,
         education: 0,
+        languages: 0,
         total: 0
       };
       await application.save();
@@ -355,6 +391,7 @@ exports.getRankedCandidates = [verifyToken, async (req, res) => {
       skillsScore: app.scores.skills || 0,
       certificatesScore: app.scores.certificates || 0,
       educationScore: app.scores.education || 0,
+      languagesScore: app.scores.languages || 0,
       totalScore: app.scores.total || 0,
       status: app.status,
       appliedAt: app.createdAt,

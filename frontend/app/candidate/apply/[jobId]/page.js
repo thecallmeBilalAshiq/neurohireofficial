@@ -32,8 +32,11 @@ function JobApplicationContent() {
     address: "",
     // Profile (Optional)
     education: "",
+    cgpa: "",
     experience: "",
+    projects: "",
     skills: "",
+    languages: "",
     certificates: "",
   });
 
@@ -125,7 +128,9 @@ function JobApplicationContent() {
             (!extracted.phone || extracted.phone === '') &&
             (!extracted.address || extracted.address === '') &&
             (!extracted.experience || extracted.experience === '') &&
+            (!extracted.projects || extracted.projects === '') &&
             (!extracted.skills || (Array.isArray(extracted.skills) && extracted.skills.length === 0)) &&
+            (!extracted.languages || (Array.isArray(extracted.languages) && extracted.languages.length === 0)) &&
             (!extracted.education || 
               (typeof extracted.education === 'object' && 
                (!extracted.education.university || extracted.education.university === '') &&
@@ -146,6 +151,7 @@ function JobApplicationContent() {
         
         // Handle education - convert object to readable string for display
         let educationStr = "";
+        let cgpaStr = "";
         if (extracted.education) {
           if (typeof extracted.education === 'object' && extracted.education !== null) {
             const edu = extracted.education;
@@ -154,6 +160,7 @@ function JobApplicationContent() {
             if (edu.degree) parts.push(edu.degree);
             if (edu.dateOfCompletion) parts.push(`(${edu.dateOfCompletion})`);
             educationStr = parts.join(' - ');
+            cgpaStr = edu.cgpa || "";
           } else if (typeof extracted.education === 'string') {
             educationStr = extracted.education;
           }
@@ -169,6 +176,16 @@ function JobApplicationContent() {
           }
         }
         
+        // Handle languages - convert array to comma-separated string for display
+        let languagesStr = "";
+        if (extracted.languages) {
+          if (Array.isArray(extracted.languages)) {
+            languagesStr = extracted.languages.join(', ');
+          } else if (typeof extracted.languages === 'string') {
+            languagesStr = extracted.languages;
+          }
+        }
+        
         setFormData({
           firstName: extracted.firstName || "",
           lastName: extracted.lastName || "",
@@ -176,8 +193,11 @@ function JobApplicationContent() {
           phone: extracted.phone || "",
           address: extracted.address || "",
           education: educationStr,
+          cgpa: cgpaStr,
           experience: extracted.experience || "",
+          projects: extracted.projects || "",
           skills: skillsStr,
+          languages: languagesStr,
           certificates: extracted.certificates || "",
         });
         toast.success("CV parsed successfully! Please review and update the information.");
@@ -410,8 +430,11 @@ function JobApplicationContent() {
                         phone: "",
                         address: "",
                         education: formData.education,
+                        cgpa: formData.cgpa,
                         experience: formData.experience,
+                        projects: formData.projects,
                         skills: formData.skills,
+                        languages: formData.languages,
                         certificates: formData.certificates,
                       })}
                       className={`text-sm ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'} flex items-center gap-1`}
@@ -433,7 +456,8 @@ function JobApplicationContent() {
                         required
                         value={formData.firstName}
                         onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="John"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -446,7 +470,8 @@ function JobApplicationContent() {
                         required
                         value={formData.lastName}
                         onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="Doe"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -459,7 +484,8 @@ function JobApplicationContent() {
                         required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="john.doe@example.com"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -472,7 +498,8 @@ function JobApplicationContent() {
                         required
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="+1 234 567 8900"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -485,7 +512,8 @@ function JobApplicationContent() {
                         required
                         value={formData.address}
                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="123 Main Street, City, State, Country"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
                   </div>
@@ -506,7 +534,21 @@ function JobApplicationContent() {
                         value={formData.education}
                         onChange={(e) => setFormData({ ...formData, education: e.target.value })}
                         rows={3}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="e.g., Bachelor of Science in Computer Science from NUST (2020)"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                        CGPA
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.cgpa}
+                        onChange={(e) => setFormData({ ...formData, cgpa: e.target.value })}
+                        placeholder="e.g., 3.8, 4.0"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -518,7 +560,21 @@ function JobApplicationContent() {
                         value={formData.experience}
                         onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
                         rows={3}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="e.g., 2 years as Software Developer at Tech Corp. Developed web applications using React and Node.js..."
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                        Projects
+                      </label>
+                      <textarea
+                        value={formData.projects}
+                        onChange={(e) => setFormData({ ...formData, projects: e.target.value })}
+                        rows={3}
+                        placeholder="e.g., E-commerce Website - Built a full-stack e-commerce platform using React, Node.js, and MongoDB..."
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -530,7 +586,21 @@ function JobApplicationContent() {
                         value={formData.skills}
                         onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
                         rows={2}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="e.g., JavaScript, Python, React, Node.js, MongoDB, Git"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
+                        Languages
+                      </label>
+                      <textarea
+                        value={formData.languages}
+                        onChange={(e) => setFormData({ ...formData, languages: e.target.value })}
+                        rows={2}
+                        placeholder="e.g., English (Fluent), Urdu (Native), Spanish (Conversational)"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
 
@@ -542,7 +612,8 @@ function JobApplicationContent() {
                         value={formData.certificates}
                         onChange={(e) => setFormData({ ...formData, certificates: e.target.value })}
                         rows={2}
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        placeholder="e.g., AWS Certified Solutions Architect, Google Cloud Professional Developer"
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
                       />
                     </div>
                   </div>

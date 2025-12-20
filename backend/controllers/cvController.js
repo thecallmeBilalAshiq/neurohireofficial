@@ -335,7 +335,9 @@ Required JSON structure:
     "cgpa": "string"
   },
   "experience": "string",
+  "projects": "string",
   "skills": ["skill1", "skill2", "skill3"],
+  "languages": ["language1", "language2"],
   "certificates": "string"
 }
 
@@ -352,10 +354,12 @@ Instructions:
    If multiple degrees, extract the most recent/highest one
    IMPORTANT: Education must be returned as a nested object with these exact field names: university, degree, dateOfCompletion, cgpa
 6. Extract work experience (companies, roles, duration, responsibilities) as a string
-7. Extract skills as an array of strings (technical skills, soft skills). Skills in the CV are usually comma-separated, so split them into individual array elements. For example: "Python, JavaScript, React" should become ["Python", "JavaScript", "React"]
-8. Extract certificates and certifications as a string
-9. If a field is not found, use empty string "" for strings, empty object {} for education, or empty array [] for skills
-10. Return ONLY the JSON object, no additional text or explanation
+7. Extract projects (personal projects, academic projects, portfolio projects) as a string. Include project names, descriptions, technologies used, and outcomes if available
+8. Extract skills as an array of strings (technical skills, soft skills). Skills in the CV are usually comma-separated, so split them into individual array elements. For example: "Python, JavaScript, React" should become ["Python", "JavaScript", "React"]
+9. Extract languages as an array of strings (e.g., ["English", "Urdu", "Spanish"]). Include proficiency levels if mentioned (e.g., "English (Fluent)", "Spanish (Basic)")
+10. Extract certificates and certifications as a string
+11. If a field is not found, use empty string "" for strings, empty object {} for education, or empty array [] for skills/languages
+12. Return ONLY the JSON object, no additional text or explanation
 
 CRITICAL: Invalid CV Detection
 - If the provided text is NOT a valid CV (e.g., random text, corrupted content, non-CV document, insufficient information, or clearly not a resume/CV), you MUST return an empty JSON object: {}
@@ -438,7 +442,9 @@ ${cvText.substring(0, 8000)}`;
           (!extractedData.phone || extractedData.phone === '') &&
           (!extractedData.address || extractedData.address === '') &&
           (!extractedData.experience || extractedData.experience === '') &&
+          (!extractedData.projects || extractedData.projects === '') &&
           (!extractedData.skills || (Array.isArray(extractedData.skills) && extractedData.skills.length === 0)) &&
+          (!extractedData.languages || (Array.isArray(extractedData.languages) && extractedData.languages.length === 0)) &&
           (!extractedData.education || 
             (typeof extractedData.education === 'object' && 
              (!extractedData.education.university || extractedData.education.university === '') &&
@@ -491,6 +497,15 @@ ${cvText.substring(0, 8000)}`;
         skillsData = [];
       }
 
+      // Handle languages as array or string
+      let languagesData = extractedData.languages || [];
+      if (typeof languagesData === 'string' && languagesData) {
+        // Split by comma if it's a string
+        languagesData = languagesData.split(',').map(l => l.trim()).filter(l => l);
+      } else if (!Array.isArray(languagesData)) {
+        languagesData = [];
+      }
+
       const result = {
         firstName: extractedData.firstName || '',
         lastName: extractedData.lastName || '',
@@ -499,7 +514,9 @@ ${cvText.substring(0, 8000)}`;
         address: extractedData.address || '',
         education: educationData,
         experience: extractedData.experience || '',
+        projects: extractedData.projects || '',
         skills: skillsData,
+        languages: languagesData,
         certificates: extractedData.certificates || ''
       };
 

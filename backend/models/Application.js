@@ -24,8 +24,11 @@ const applicationSchema = new mongoose.Schema({
     address: { type: String, default: '' },
     // Profile (Optional)
     education: { type: String, default: '' },
+    cgpa: { type: String, default: '' },
     experience: { type: String, default: '' },
+    projects: { type: String, default: '' },
     skills: { type: String, default: '' },
+    languages: { type: String, default: '' },
     certificates: { type: String, default: '' },
   },
   status: {
@@ -47,6 +50,7 @@ const applicationSchema = new mongoose.Schema({
     skills: { type: Number, default: 0 },
     certificates: { type: Number, default: 0 },
     education: { type: Number, default: 0 },
+    languages: { type: Number, default: 0 },
     total: { type: Number, default: 0 }
   },
   rankedAt: {
