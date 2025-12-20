@@ -152,7 +152,7 @@ exports.generateJobPostImage = [
         prompt = `${prompt} Additional modifications requested: ${customPrompt}`;
       }
 
-      console.log('Generating AI image with prompt:', prompt.substring(0, 200) + '...');
+      //console.log('Generating AI image with prompt:', prompt.substring(0, 200) + '...');
 
       // IMPORTANT: Set callback URL for webhook
       // Use ngrok URL for webhook callback (Nanobanana needs public URL)

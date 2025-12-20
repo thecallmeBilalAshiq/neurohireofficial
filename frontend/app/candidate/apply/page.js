@@ -239,8 +239,8 @@ function ApplyToJobContent() {
               </h3>
             </div>
             <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-6`}>
-              Please ensure that all information you provide is accurate and correct. 
-              <strong className="text-red-500"> Any false or incorrect data will result in immediate eviction from the application process.</strong>
+              We kindly request that all information provided be accurate and truthful. 
+              <strong className="text-red-500"> Submission of false or incorrect information may result in disqualification from the application process.</strong>
             </p>
             <div className="flex gap-3 justify-end">
               <button
