@@ -2,6 +2,7 @@ const axios = require('axios');
 const JobPost = require('../models/JobPost');
 const User = require('../models/User');
 const admin = require('../config/firebase');
+const config = require('../config/appConfig');
 
 // Middleware to verify Firebase token and get user
 const verifyToken = async (req, res, next) => {
@@ -66,9 +67,9 @@ exports.postToSocialMedia = [verifyToken, async (req, res) => {
     }
     
     // Validate that the URL doesn't point to the backend itself
-    if (n8nWebhookUrl.includes('nonprotective-kay-longanamous.ngrok-free.dev') && !n8nWebhookUrl.includes('5678')) {
+    if (n8nWebhookUrl.includes('jose-revisitable-tracee.ngrok-free.dev') && !n8nWebhookUrl.includes('5678')) {
       console.error('⚠️  WARNING: N8N_WEBHOOK_URL appears to point to the backend server instead of n8n!');
-      console.error('   Backend ngrok URL: https://nonprotective-kay-longanamous.ngrok-free.dev');
+      console.error('   Backend ngrok URL: https://jose-revisitable-tracee.ngrok-free.dev');
       console.error('   n8n typically runs on port 5678. Make sure you have a separate ngrok tunnel for n8n.');
     }
 
@@ -196,8 +197,8 @@ exports.postToSocialMedia = [verifyToken, async (req, res) => {
     // 3. Local template path (construct full URL with ngrok/public URL)
     let imageUrl = jobPost.templateImage || '/job-posting-template.png';
     
-    // Get frontend URL - must be publicly accessible (ngrok URL)
-    const frontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+    // Get frontend URL from centralized config
+    const frontendUrl = config.frontend.url;
     
     // If it's already a full URL (http/https), check if it's localhost and replace with ngrok URL
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
@@ -225,8 +226,8 @@ exports.postToSocialMedia = [verifyToken, async (req, res) => {
     if (imageUrl.includes('localhost') || imageUrl.includes('127.0.0.1')) {
       console.warn('⚠️  WARNING: Image URL still contains localhost. n8n will not be able to access it!');
       console.warn(`   Image URL: ${imageUrl}`);
-      console.warn(`   FRONTEND_URL: ${process.env.FRONTEND_URL || 'NOT SET'}`);
-      console.warn('   Please set FRONTEND_URL to your ngrok URL in backend .env file');
+      console.warn(`   FRONTEND_URL: ${config.frontend.url}`);
+      console.warn('   Please set FRONTEND_URL in backend .env file to your ngrok URL');
     }
 
     // Prepare the data to send to n8n
@@ -250,7 +251,7 @@ exports.postToSocialMedia = [verifyToken, async (req, res) => {
         skills: skillsStr,
         description: description,
         deadline: jobPost.deadline ? jobPost.deadline.toISOString().split('T')[0] : '',
-        applicationUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/jobs/${jobPost._id}`,
+        applicationUrl: config.getFrontendRoute('jobs') + `/${jobPost._id}`,
       },
       image: {
         url: imageUrl, // Full URL or base64 data URI - n8n will handle it

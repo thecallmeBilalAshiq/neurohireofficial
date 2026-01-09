@@ -7,6 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { toast } from "react-toastify";
 import { getJobPosts, createJobPost, updateJobPost, deleteJobPost, getJobPostById, generateJobDescription, postToSocialMedia, generateAIImage, checkAIImageResult, getCompanyInfo, updateCompanyInfo } from "../../../lib/api";
+import config from "../../../lib/config";
 
 function JobPostingContent() {
   const router = useRouter();
@@ -226,13 +227,16 @@ function JobPostingContent() {
       setLoading(true);
       const result = await getJobPosts(token);
       if (result.success) {
-        setJobPosts(result.data);
+        // Ensure result.data is always an array
+        setJobPosts(Array.isArray(result.data) ? result.data : []);
       } else {
         toast.error(result.error || 'Failed to fetch job posts');
+        setJobPosts([]); // Set to empty array on error
       }
     } catch (error) {
       toast.error('Failed to fetch job posts');
       console.error('Error fetching job posts:', error);
+      setJobPosts([]); // Set to empty array on error
     } finally {
       setLoading(false);
     }
@@ -761,11 +765,10 @@ function JobPostingContent() {
     try {
       let finalImageUrl = selectedTemplate || '/job-posting-template.png';
       
-      // Convert local template paths to full URLs using ngrok/public URL
+      // Convert local template paths to full URLs using centralized config
       if (showTemplateSelection && selectedTemplate && (selectedTemplate.startsWith('/Temaple-') || selectedTemplate.startsWith('/Template-') || selectedTemplate.startsWith('/job-posting-template'))) {
-        // Use ngrok URL or frontend URL for local templates
-        const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
-        finalImageUrl = `${frontendUrl}${selectedTemplate}`;
+        // Use centralized config for frontend URL
+        finalImageUrl = config.getFullUrl(selectedTemplate);
       }
 
       const jobData = {
@@ -1242,7 +1245,7 @@ function JobPostingContent() {
                   <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
                   <p className={`mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading job posts...</p>
                 </div>
-              ) : jobPosts.length === 0 ? (
+              ) : !Array.isArray(jobPosts) || jobPosts.length === 0 ? (
                 <div className="text-center py-12">
                   <p className={`${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>No active job posts found.</p>
                 </div>
@@ -1261,7 +1264,7 @@ function JobPostingContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {jobPosts.map((jobPost, index) => (
+                      {(Array.isArray(jobPosts) ? jobPosts : []).map((jobPost, index) => (
                         <tr key={jobPost._id} className={`border-b ${darkMode ? 'border-gray-700 hover:bg-gray-700' : 'border-gray-200 hover:bg-gray-50'} transition-colors`}>
                           <td className={`py-3 px-4 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{index + 1}</td>
                           <td className={`py-3 px-4 text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-800'}`}>{jobPost.jobTitle}</td>

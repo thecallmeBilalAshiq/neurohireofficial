@@ -2,6 +2,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const admin = require('../config/firebase');
+const config = require('../config/appConfig');
 const User = require('../models/User');
 const axios = require('axios');
 
@@ -155,9 +156,8 @@ exports.generateJobPostImage = [
       //console.log('Generating AI image with prompt:', prompt.substring(0, 200) + '...');
 
       // IMPORTANT: Set callback URL for webhook
-      // Use ngrok URL for webhook callback (Nanobanana needs public URL)
-      const backendUrl = process.env.BACKEND_URL || 'https://nonprotective-kay-longanamous.ngrok-free.dev';
-      const callbackUrl = `${backendUrl}/api/ai-image/webhook/nanobanana`;
+      // Use centralized config for webhook callback URL
+      const callbackUrl = config.getWebhookUrl('nanobanana');
 
       console.log('Sending request to Nanobanana with callback URL:', callbackUrl);
 
@@ -224,36 +224,54 @@ exports.generateJobPostImage = [
 exports.nanobananaWebhook = async (req, res) => {
   try {
     console.log('=== WEBHOOK RECEIVED ===');
-    console.log('Headers:', JSON.stringify(req.headers).substring(0, 300));
-    console.log('Body:', JSON.stringify(req.body).substring(0, 1000));
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('Raw Body (first 500 chars):', JSON.stringify(req.body).substring(0, 500));
     console.log('========================');
 
     // Nanobanana sends the result in the webhook
-    const webhookData = req.body;
+    const webhookData = req.body || {};
     
     // Extract taskId and image data from various possible response formats
-    const taskId = webhookData.taskId || webhookData.data?.taskId || webhookData.task_id;
+    const taskId = webhookData.taskId || 
+                   webhookData.data?.taskId || 
+                   webhookData.task_id ||
+                   webhookData.data?.task_id ||
+                   webhookData.id;
     
-    // Nanobanana sends image URL in data.info.resultImageUrl (check this first!)
+    console.log('Extracted taskId:', taskId);
+    
+    // Nanobanana sends image URL in various formats - check all possibilities
     console.log('Extracting image URL from webhook...');
-    console.log('webhookData.data?.info?.resultImageUrl:', webhookData.data?.info?.resultImageUrl);
-    console.log('webhookData.data?.imageUrl:', webhookData.data?.imageUrl);
-    console.log('webhookData.imageUrl:', webhookData.imageUrl);
+    console.log('Full webhookData structure:', JSON.stringify(webhookData, null, 2));
     
-    const imageUrl = webhookData.data?.info?.resultImageUrl ||  // Nanobanana format - check first!
+    // Try multiple paths for image URL
+    const imageUrl = webhookData.data?.info?.resultImageUrl ||  // Nanobanana format
+                     webhookData.data?.resultImageUrl ||
                      webhookData.info?.resultImageUrl ||
                      webhookData.data?.imageUrl || 
                      webhookData.data?.url ||
+                     webhookData.data?.image?.url ||
                      webhookData.imageUrl || 
                      webhookData.url || 
-                     webhookData.image;
+                     webhookData.image ||
+                     webhookData.result?.imageUrl ||
+                     webhookData.result?.url;
     
     console.log('Extracted imageUrl:', imageUrl);
     
+    // Try multiple paths for base64
     const base64 = webhookData.base64 || 
                    webhookData.imageBase64 || 
                    webhookData.data?.base64 || 
-                   webhookData.data?.imageBase64;
+                   webhookData.data?.imageBase64 ||
+                   webhookData.data?.image?.base64 ||
+                   webhookData.result?.base64 ||
+                   webhookData.result?.imageBase64;
+    
+    console.log('Extracted base64 (length):', base64 ? base64.length : 'none');
 
     if (!taskId) {
       console.error('Webhook missing taskId:', webhookData);
@@ -273,21 +291,31 @@ exports.nanobananaWebhook = async (req, res) => {
       }
     }
 
-    if (!imageData) {
+    if (!imageData && !imageUrl && !base64) {
       console.error('❌ Webhook missing image data. Full webhook data:', JSON.stringify(webhookData, null, 2));
+      // Store error state instead of returning error - so polling can detect failure
+      const existingResult = imageResults.get(taskId) || {};
+      imageResults.set(taskId, {
+        status: 'error',
+        error: 'No image data in webhook',
+        userId: existingResult.userId,
+        completedAt: new Date()
+      });
       return res.status(400).json({ error: 'No image data in webhook' });
     }
 
     // Update the stored result
     const existingResult = imageResults.get(taskId) || {};
     
-    // If imageData is a URL, we'll need to fetch it and convert to base64 for frontend
-    // Or we can return the URL directly and let frontend handle it
+    // If we have a URL, store it - frontend can use it directly
+    // If we have base64, store it as data URI
+    const finalImageData = imageData || imageUrl || (base64 ? `data:image/png;base64,${base64}` : null);
+    
     imageResults.set(taskId, {
       status: 'completed',
-      imageUrl: imageUrl || (imageData.startsWith('http') ? imageData : null),
-      imageBase64: typeof imageData === 'string' && imageData.startsWith('data:image') ? imageData : null,
-      imageData: imageData, // Store both URL and base64 for flexibility
+      imageUrl: imageUrl || (finalImageData && finalImageData.startsWith('http') ? finalImageData : null),
+      imageBase64: finalImageData && finalImageData.startsWith('data:image') ? finalImageData : null,
+      imageData: finalImageData, // Store both URL and base64 for flexibility
       completedAt: new Date(),
       userId: existingResult.userId
     });
@@ -331,7 +359,9 @@ exports.checkImageResult = [
         status: result.status,
         hasImageUrl: !!result.imageUrl,
         hasImageBase64: !!result.imageBase64,
-        hasImageData: !!result.imageData
+        hasImageData: !!result.imageData,
+        imageUrl: result.imageUrl,
+        imageData: result.imageData ? (typeof result.imageData === 'string' ? result.imageData.substring(0, 100) + '...' : 'object') : null
       });
 
       // Verify user owns this task (optional security check)
@@ -350,17 +380,26 @@ exports.checkImageResult = [
         imageData = result.imageData;
       }
       
+      const responseData = {
+        taskId: taskId,
+        status: result.status,
+        imageUrl: result.imageUrl || null,
+        imageBase64: result.imageBase64 || null,
+        imageData: imageData, // Include imageData for URL or base64
+        createdAt: result.createdAt,
+        completedAt: result.completedAt
+      };
+      
+      console.log(`Returning response data for taskId ${taskId}:`, {
+        status: responseData.status,
+        hasImageUrl: !!responseData.imageUrl,
+        hasImageData: !!responseData.imageData,
+        imageDataType: responseData.imageData ? (typeof responseData.imageData) : 'null'
+      });
+      
       return res.json({
         success: true,
-        data: {
-          taskId: taskId,
-          status: result.status,
-          imageUrl: result.imageUrl || null,
-          imageBase64: result.imageBase64 || null,
-          imageData: imageData, // Include imageData for URL or base64
-          createdAt: result.createdAt,
-          completedAt: result.completedAt
-        }
+        data: responseData
       });
 
     } catch (error) {
