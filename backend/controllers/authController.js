@@ -87,6 +87,11 @@ exports.verifyEmail = async (req, res) => {
     // Get user details from Firebase
     const firebaseUser = await admin.auth().getUser(decodedToken.uid);
 
+    // Get role from Firebase custom claims (set by admin when creating HR accounts)
+    // Default to 'candidate' if no custom claims exist
+    const customClaims = firebaseUser.customClaims || {};
+    const userRole = customClaims.role || 'candidate';
+
     // Save user to MongoDB only after email verification
     // Use displayName from Firebase (set during signup) or fallback to email username
     const userName = firebaseUser.displayName || decodedToken.email.split('@')[0] || 'User';
@@ -95,7 +100,7 @@ exports.verifyEmail = async (req, res) => {
       firebaseUid: decodedToken.uid,
       email: decodedToken.email,
       name: userName,
-      role: 'candidate',
+      role: userRole,
       emailVerified: true,
     });
 
@@ -147,6 +152,13 @@ exports.login = async (req, res) => {
     // Check if user exists in MongoDB
     let user = await User.findOne({ firebaseUid: decodedToken.uid });
     
+    // Get Firebase user to access custom claims
+    const firebaseUser = await admin.auth().getUser(decodedToken.uid);
+    
+    // Get role from Firebase custom claims (set by admin when creating HR accounts)
+    const customClaims = firebaseUser.customClaims || {};
+    const userRole = customClaims.role || 'candidate';
+
     if (!user) {
       // If user doesn't exist in MongoDB but email is verified, create the user
       const firebaseUser = await admin.auth().getUser(decodedToken.uid);
@@ -155,7 +167,7 @@ exports.login = async (req, res) => {
         firebaseUid: decodedToken.uid,
         email: decodedToken.email,
         name: userName,
-        role: 'candidate',
+        role: userRole,
         emailVerified: true,
       });
       await user.save();
@@ -163,8 +175,12 @@ exports.login = async (req, res) => {
       // Update emailVerified status if it was false
       if (!user.emailVerified) {
         user.emailVerified = true;
-        await user.save();
       }
+      // Sync role from Firebase custom claims if it exists and differs
+      if (customClaims.role && customClaims.role !== user.role) {
+        user.role = customClaims.role;
+      }
+      await user.save();
     }
 
     res.json({

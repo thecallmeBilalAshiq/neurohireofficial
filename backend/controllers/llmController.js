@@ -31,6 +31,13 @@ exports.generateJobDescription = async (req, res) => {
 
     const { jobData, previousDescription, editInstructions } = req.body;
 
+    // Validate jobData for initial generation
+    if (!previousDescription && (!jobData || !jobData.jobTitle || !jobData.company)) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: jobData with jobTitle and company are required for initial generation.' 
+      });
+    }
+
     let prompt;
 
     if (previousDescription && editInstructions) {
@@ -171,26 +178,47 @@ Requirements:
 Write a complete, polished job description that would attract top talent. CRITICAL: Make absolutely sure you add blank lines (\n\n) after each section and paragraph so it displays properly on social media platforms.`;
     }
 
-    const { error, output } = await model.run([
-      {
-        "role": "user",
-        "content": prompt
+    let output, error;
+    try {
+      const result = await model.run([
+        {
+          "role": "user",
+          "content": prompt
+        }
+      ]);
+      
+      // Handle different response formats from Bytez SDK
+      if (result && typeof result === 'object') {
+        error = result.error || null;
+        output = result.output || result.content || result.text || result;
+      } else {
+        output = result;
       }
-    ]);
+    } catch (apiError) {
+      console.error('LLM API Error:', apiError);
+      error = apiError;
+    }
 
     if (error) {
       console.error('LLM Error:', error);
       
       // Handle specific error types
-      if (error.message && error.message.includes('Unauthorized')) {
+      if (error.message && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
         return res.status(401).json({ 
           error: 'API key is invalid or expired. Please check your BYTEZ_API_KEY.' 
         });
       }
       
+      if (error.message && error.message.includes('fetch failed')) {
+        return res.status(503).json({ 
+          error: 'LLM service is currently unavailable. Please try again later.',
+          details: 'Network connection to LLM service failed. Check your internet connection and BYTEZ_API_KEY.'
+        });
+      }
+      
       return res.status(500).json({ 
         error: error.message || 'Failed to generate job description',
-        details: error 
+        details: error.toString()
       });
     }
 

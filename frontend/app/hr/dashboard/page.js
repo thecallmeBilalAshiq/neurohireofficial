@@ -681,8 +681,14 @@ function HRDashboardContent() {
                     <svg width="100%" height="100%" viewBox="0 0 600 200" preserveAspectRatio="none">
                       {/* Calculate max value for scaling */}
                       {(() => {
-                        const maxApps = Math.max(...applicationsData.map(d => d.applications), 1);
-                        const maxCandidates = Math.max(...applicationsData.map(d => d.candidates), 1);
+                        // Ensure values are numbers to prevent NaN
+                        const safeData = applicationsData.map(d => ({
+                          applications: Number(d.applications) || 0,
+                          candidates: Number(d.candidates) || 0,
+                          month: d.month
+                        }));
+                        const maxApps = applicationsData.length > 0 ? Math.max(...safeData.map(d => d.applications), 1) : 1;
+                        const maxCandidates = applicationsData.length > 0 ? Math.max(...safeData.map(d => d.candidates), 1) : 1;
                         const maxValue = Math.max(maxApps, maxCandidates, 1);
                         
                         const yAxisValues = [0, Math.ceil(maxValue * 0.25), Math.ceil(maxValue * 0.5), Math.ceil(maxValue * 0.75), Math.ceil(maxValue)];
@@ -713,8 +719,8 @@ function HRDashboardContent() {
 
                             {/* Applications line */}
                             <polyline
-                              points={applicationsData.map((d, i) => {
-                                const x = 40 + (i / Math.max(applicationsData.length - 1, 1)) * 540;
+                              points={safeData.map((d, i) => {
+                                const x = safeData.length > 1 ? 40 + (i / (safeData.length - 1)) * 540 : 290;
                                 const y = 200 - (d.applications / maxValue) * 180;
                                 return `${x},${y}`;
                               }).join(" ")}
@@ -725,8 +731,8 @@ function HRDashboardContent() {
 
                             {/* Candidates line */}
                             <polyline
-                              points={applicationsData.map((d, i) => {
-                                const x = 40 + (i / Math.max(applicationsData.length - 1, 1)) * 540;
+                              points={safeData.map((d, i) => {
+                                const x = safeData.length > 1 ? 40 + (i / (safeData.length - 1)) * 540 : 290;
                                 const y = 200 - (d.candidates / maxValue) * 180;
                                 return `${x},${y}`;
                               }).join(" ")}
@@ -736,8 +742,8 @@ function HRDashboardContent() {
                             />
 
                             {/* Data points */}
-                            {applicationsData.map((d, i) => {
-                              const x = 40 + (i / Math.max(applicationsData.length - 1, 1)) * 540;
+                            {safeData.map((d, i) => {
+                              const x = safeData.length > 1 ? 40 + (i / (safeData.length - 1)) * 540 : 290;
                               return (
                                 <g key={`data-point-${i}-${d.month}`}>
                                   <circle cx={x} cy={200 - (d.applications / maxValue) * 180} r="4" fill="#10b981" />
@@ -747,8 +753,8 @@ function HRDashboardContent() {
                             })}
 
                             {/* X-axis labels */}
-                            {applicationsData.map((d, i) => {
-                              const x = 40 + (i / Math.max(applicationsData.length - 1, 1)) * 540;
+                            {safeData.map((d, i) => {
+                              const x = safeData.length > 1 ? 40 + (i / (safeData.length - 1)) * 540 : 290;
                               return (
                                 <text key={`x-label-${i}-${d.month}`} x={x} y="195" className={`text-xs ${darkMode ? 'fill-gray-400' : 'fill-gray-500'}`} textAnchor="middle">
                                   {d.month}
@@ -787,7 +793,10 @@ function HRDashboardContent() {
                 <div className="h-48 sm:h-64 overflow-x-auto">
                   <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="none">
                     {(() => {
-                      const maxValue = Math.max(statistics.activeJobs, statistics.completedJobs, 1);
+                      // Ensure values are numbers to prevent NaN
+                      const activeJobs = Number(statistics.activeJobs) || 0;
+                      const completedJobs = Number(statistics.completedJobs) || 0;
+                      const maxValue = Math.max(activeJobs, completedJobs, 1);
                       const barWidth = 80;
                       const spacing = 100;
                       const startX = 80;
@@ -822,16 +831,16 @@ function HRDashboardContent() {
                           <g>
                             <rect
                               x={startX}
-                              y={200 - (statistics.activeJobs / maxValue) * 180}
+                              y={200 - (activeJobs / maxValue) * 180}
                               width={barWidth}
-                              height={(statistics.activeJobs / maxValue) * 180}
+                              height={(activeJobs / maxValue) * 180}
                               fill="#10b981"
                             />
                             <text x={startX + barWidth / 2} y="195" className={`text-xs ${darkMode ? 'fill-gray-400' : 'fill-gray-500'}`} textAnchor="middle">
                               Active
                             </text>
-                            <text x={startX + barWidth / 2} y={195 - (statistics.activeJobs / maxValue) * 180} className={`text-xs font-semibold ${darkMode ? 'fill-white' : 'fill-gray-800'}`} textAnchor="middle">
-                              {statistics.activeJobs}
+                            <text x={startX + barWidth / 2} y={195 - (activeJobs / maxValue) * 180} className={`text-xs font-semibold ${darkMode ? 'fill-white' : 'fill-gray-800'}`} textAnchor="middle">
+                              {activeJobs}
                             </text>
                           </g>
 
@@ -839,16 +848,16 @@ function HRDashboardContent() {
                           <g>
                             <rect
                               x={startX + spacing}
-                              y={200 - (statistics.completedJobs / maxValue) * 180}
+                              y={200 - (completedJobs / maxValue) * 180}
                               width={barWidth}
-                              height={(statistics.completedJobs / maxValue) * 180}
+                              height={(completedJobs / maxValue) * 180}
                               fill="#f59e0b"
                             />
                             <text x={startX + spacing + barWidth / 2} y="195" className={`text-xs ${darkMode ? 'fill-gray-400' : 'fill-gray-500'}`} textAnchor="middle">
                               Completed
                             </text>
-                            <text x={startX + spacing + barWidth / 2} y={195 - (statistics.completedJobs / maxValue) * 180} className={`text-xs font-semibold ${darkMode ? 'fill-white' : 'fill-gray-800'}`} textAnchor="middle">
-                              {statistics.completedJobs}
+                            <text x={startX + spacing + barWidth / 2} y={195 - (completedJobs / maxValue) * 180} className={`text-xs font-semibold ${darkMode ? 'fill-white' : 'fill-gray-800'}`} textAnchor="middle">
+                              {completedJobs}
                             </text>
                           </g>
                         </>

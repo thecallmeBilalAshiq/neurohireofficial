@@ -1,16 +1,24 @@
 import axios from 'axios';
+import config from './config';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = config.api.getBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    // Bypass ngrok browser warning page
+    'ngrok-skip-browser-warning': 'true',
   },
 });
 
-// Request interceptor to handle FormData properly
+// Request interceptor to handle FormData properly and ensure ngrok header
 api.interceptors.request.use((config) => {
+  // Always add ngrok bypass header for ngrok URLs
+  if (API_BASE_URL.includes('ngrok') || config.url?.includes('ngrok')) {
+    config.headers['ngrok-skip-browser-warning'] = 'true';
+  }
+  
   // If the data is FormData, remove Content-Type header to let axios set it with boundary
   if (config.data instanceof FormData) {
     delete config.headers['Content-Type'];
@@ -18,10 +26,51 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor to catch errors
+// Response interceptor to catch errors and handle ngrok HTML responses
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Check if response is HTML (ngrok warning page) instead of JSON
+    const contentType = response.headers['content-type'] || '';
+    const responseData = response.data;
+    
+    // Check if we got HTML instead of JSON (ngrok warning page)
+    if (typeof responseData === 'string' && (
+      responseData.trim().startsWith('<!DOCTYPE html>') || 
+      responseData.trim().startsWith('<html') ||
+      responseData.includes('ngrok') && responseData.includes('ERR_NGROK')
+    )) {
+      console.error('⚠️ Received HTML instead of JSON - ngrok warning page detected');
+      console.error('Response preview:', responseData.substring(0, 200));
+      
+      // Create a proper error object
+      const error = new Error('Service unavailable - ngrok warning page detected');
+      error.response = {
+        status: 503,
+        statusText: 'Service Unavailable',
+        data: {
+          error: 'Service temporarily unavailable. ngrok is showing a warning page.',
+          details: 'Please ensure the ngrok-skip-browser-warning header is being sent with requests.',
+          htmlResponse: true
+        },
+        headers: response.headers
+      };
+      error.config = response.config;
+      return Promise.reject(error);
+    }
+    
+    return response;
+  },
   (error) => {
+    // Check if error response is HTML (ngrok warning page)
+    const errorData = error.response?.data;
+    if (typeof errorData === 'string' && errorData.trim().startsWith('<!DOCTYPE html>')) {
+      console.error('Error response is HTML - ngrok warning page detected');
+      error.response.data = {
+        error: 'Service temporarily unavailable. ngrok warning page detected.',
+        details: 'Please ensure the ngrok-skip-browser-warning header is being sent.'
+      };
+    }
+    
     // Dispatch error event for notification system
     if (typeof window !== 'undefined') {
       const errorMessage = error.response?.data?.error || error.message || 'An error occurred';
@@ -269,10 +318,49 @@ export const checkAIImageResult = async (taskId, idToken) => {
     const response = await api.get(`/ai-image/result/${taskId}`, {
       headers: {
         Authorization: `Bearer ${idToken}`,
+        // Ensure ngrok header is set
+        'ngrok-skip-browser-warning': 'true',
       },
     });
-    return { success: true, data: response.data.data };
+    
+    // Check if we got HTML instead of JSON (should be caught by interceptor, but double-check)
+    if (typeof response.data === 'string' && (
+      response.data.trim().startsWith('<!DOCTYPE html>') || 
+      response.data.trim().startsWith('<html') ||
+      (response.data.includes('ngrok') && response.data.includes('ERR_NGROK'))
+    )) {
+      console.error('⚠️ Received HTML in checkAIImageResult - ngrok warning page');
+      return {
+        success: false,
+        error: 'Service unavailable - ngrok warning page detected. Please check your API configuration.',
+        status: 'error',
+      };
+    }
+    
+    // Ensure we have the correct response structure
+    if (response.data && response.data.data) {
+      return { success: true, data: response.data.data };
+    } else if (response.data) {
+      // Fallback: if data is directly in response.data
+      return { success: true, data: response.data };
+    } else {
+      return {
+        success: false,
+        error: 'Invalid response structure',
+        status: 'error',
+      };
+    }
   } catch (error) {
+    // Handle ngrok HTML response errors
+    if (error.response?.data?.htmlResponse || 
+        (typeof error.response?.data === 'string' && error.response.data.includes('ngrok'))) {
+      return {
+        success: false,
+        error: 'Service unavailable - ngrok warning page detected. Please ensure ngrok-skip-browser-warning header is set.',
+        status: 'error',
+      };
+    }
+    
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Failed to check image result',
@@ -440,6 +528,131 @@ export const getDashboardStatistics = async (idToken) => {
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Failed to fetch dashboard statistics',
+    };
+  }
+};
+
+// Admin API Functions
+export const adminLogin = async (email, password) => {
+  try {
+    const response = await api.post('/admin/login', { email, password });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Admin login failed',
+    };
+  }
+};
+
+export const createHR = async (hrData, adminToken) => {
+  try {
+    const response = await api.post('/admin/hr', hrData, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to create HR account',
+    };
+  }
+};
+
+export const getAllHR = async (adminToken) => {
+  try {
+    const response = await api.get('/admin/hr', {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch HR accounts',
+    };
+  }
+};
+
+export const getHRById = async (uid, adminToken) => {
+  try {
+    const response = await api.get(`/admin/hr/${uid}`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch HR account',
+    };
+  }
+};
+
+export const updateHR = async (uid, hrData, adminToken) => {
+  try {
+    const response = await api.put(`/admin/hr/${uid}`, hrData, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to update HR account',
+    };
+  }
+};
+
+export const blockHR = async (uid, adminToken) => {
+  try {
+    const response = await api.post(`/admin/hr/${uid}/block`, {}, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to block HR account',
+    };
+  }
+};
+
+export const activateHR = async (uid, adminToken) => {
+  try {
+    const response = await api.post(`/admin/hr/${uid}/activate`, {}, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to activate HR account',
+    };
+  }
+};
+
+export const deleteHR = async (uid, adminToken) => {
+  try {
+    const response = await api.delete(`/admin/hr/${uid}`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to delete HR account',
     };
   }
 };

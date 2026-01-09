@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
+const config = require('./config/appConfig');
 const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
 const jobPostRoutes = require('./routes/jobPosts');
 const llmRoutes = require('./routes/llm');
 const socialMediaRoutes = require('./routes/socialMedia');
@@ -16,7 +18,26 @@ dotenv.config();
 connectDB();
 
 const app = express();
-app.use(cors({ origin: 'http://localhost:3000' })); // Update to your frontend URL later
+// CORS configuration - use centralized config
+app.use(cors({ 
+  origin: config.frontend.corsOrigin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization',
+    'ngrok-skip-browser-warning' // Allow ngrok bypass header
+  ]
+}));
+
+// Middleware to handle ngrok browser warning (for webhooks from external services)
+app.use((req, res, next) => {
+  // Allow ngrok browser warning bypass header
+  if (req.headers['ngrok-skip-browser-warning']) {
+    res.setHeader('ngrok-skip-browser-warning', 'true');
+  }
+  next();
+});
 
 // Only parse JSON for non-multipart requests
 app.use((req, res, next) => {
@@ -34,6 +55,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/job-posts', jobPostRoutes);
 app.use('/api/llm', llmRoutes);
 app.use('/api/social-media', socialMediaRoutes);
@@ -83,5 +105,5 @@ app.use((req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = config.backend.port;
 app.listen(PORT, () => console.log(`Server on port ${PORT}`));
