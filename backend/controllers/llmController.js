@@ -1,4 +1,5 @@
 const dotenv = require('dotenv');
+const axios = require('axios');
 dotenv.config();
 
 
@@ -19,6 +20,9 @@ try {
 }
 
 const { cleanJobDescription } = require('../utils/textCleaner');
+
+// n8n Webhook URL for sending emails
+const N8N_EMAIL_WEBHOOK_URL = process.env.N8N_EMAIL_WEBHOOK_URL || 'http://localhost:5678/webhook/send-interview-emails';
 
 // Generate job description from form data
 exports.generateJobDescription = async (req, res) => {
@@ -185,7 +189,9 @@ Write a complete, polished job description that would attract top talent. CRITIC
           "role": "user",
           "content": prompt
         }
-      ]);
+      ], {
+        max_completion_tokens: 4096 // Limit response tokens to avoid exceeding model limits
+      });
       
       // Handle different response formats from Bytez SDK
       if (result && typeof result === 'object') {
@@ -262,3 +268,219 @@ Write a complete, polished job description that would attract top talent. CRITIC
   }
 };
 
+// Generate interview invitation email using GPT-4o
+exports.generateInterviewEmail = async (req, res) => {
+  try {
+    if (!model) {
+      return res.status(503).json({ 
+        error: 'LLM service not available. Please ensure bytez.js is installed and BYTEZ_API_KEY is set.' 
+      });
+    }
+
+    const { candidates, jobInfo, emailType, companyInfo } = req.body;
+
+    if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({ error: 'At least one candidate is required' });
+    }
+
+    if (!jobInfo || !jobInfo.jobTitle) {
+      return res.status(400).json({ error: 'Job information is required' });
+    }
+
+    // Determine email type: 'online_test' or 'interview'
+    const type = emailType || 'interview';
+    const typeLabel = type === 'online_test' ? 'Online Assessment/Test' : 'Interview';
+
+    // Create a sample candidate name for the template
+    const sampleCandidate = candidates[0];
+
+    const prompt = `You are a professional HR recruiter. Generate a formal, professional, and friendly ${typeLabel.toLowerCase()} invitation email template.
+
+Job Details:
+- Position: ${jobInfo.jobTitle}
+- Company: ${jobInfo.company || companyInfo?.name || 'Our Company'}
+${jobInfo.location ? `- Location: ${jobInfo.location}` : ''}
+
+Email Type: ${typeLabel} Invitation
+
+Please generate a complete, professional email with the following structure:
+
+1. Subject Line: Create an appropriate subject line for the ${typeLabel.toLowerCase()} invitation
+
+2. Email Body:
+   - Professional greeting using [CANDIDATE_NAME] as placeholder
+   - Express appreciation for their application
+   - Congratulate them on being shortlisted
+   - ${type === 'online_test' 
+     ? 'Explain that they need to complete an online assessment as part of the selection process'
+     : 'Invite them for an interview (mention date/time will be confirmed separately or use [DATE] and [TIME] placeholders)'}
+   - ${type === 'online_test'
+     ? 'Include placeholders: [TEST_LINK], [TEST_DEADLINE], [TEST_DURATION]'
+     : 'Include placeholders: [INTERVIEW_DATE], [INTERVIEW_TIME], [INTERVIEW_LOCATION/LINK]'}
+   - Mention what they should prepare or expect
+   - Provide contact information for questions
+   - Professional closing
+
+3. Important Requirements:
+   - Use [CANDIDATE_NAME] placeholder where the candidate's name should go
+   - Keep the tone professional yet warm and encouraging
+   - Make the email feel personalized even though it's a template
+   - Include all necessary details a candidate would need
+   - End with a professional signature block using [HR_NAME], [HR_TITLE], [COMPANY_NAME], [COMPANY_EMAIL], [COMPANY_PHONE] placeholders
+
+Format the response as JSON with this structure:
+{
+  "subject": "Email subject line here",
+  "body": "Full email body here with proper line breaks using \\n"
+}
+
+IMPORTANT: Return ONLY valid JSON, no additional text or markdown.`;
+
+    let output, error;
+    try {
+      const result = await model.run([
+        {
+          "role": "user",
+          "content": prompt
+        }
+      ], {
+        max_completion_tokens: 4096 // Limit response tokens to avoid exceeding model limits
+      });
+      
+      if (result && typeof result === 'object') {
+        error = result.error || null;
+        output = result.output || result.content || result.text || result;
+      } else {
+        output = result;
+      }
+    } catch (apiError) {
+      console.error('LLM API Error:', apiError);
+      error = apiError;
+    }
+
+    if (error) {
+      console.error('LLM Error:', error);
+      return res.status(500).json({ 
+        error: error.message || 'Failed to generate email',
+        details: error.toString()
+      });
+    }
+
+    // Parse the output
+    let emailData;
+    try {
+      // Extract JSON from the response
+      let jsonStr = typeof output === 'string' ? output : (output.content || output.text || JSON.stringify(output));
+      
+      // Clean up the response - remove markdown code blocks if present
+      jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      
+      emailData = JSON.parse(jsonStr);
+    } catch (parseError) {
+      console.error('Failed to parse LLM response:', parseError);
+      // Fallback: create a basic email structure
+      const bodyText = typeof output === 'string' ? output : (output.content || output.text || '');
+      emailData = {
+        subject: `${typeLabel} Invitation - ${jobInfo.jobTitle} at ${jobInfo.company || 'Our Company'}`,
+        body: bodyText
+      };
+    }
+
+    res.json({
+      success: true,
+      email: {
+        subject: emailData.subject,
+        body: emailData.body,
+        type: type,
+        candidateCount: candidates.length,
+        candidates: candidates.map(c => ({
+          name: c.candidateName || c.name,
+          email: c.email
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Generate interview email error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate interview email' });
+  }
+};
+
+// Send interview emails via n8n webhook
+exports.sendInterviewEmails = async (req, res) => {
+  try {
+    const { candidates, emailContent, jobInfo, hrInfo } = req.body;
+
+    if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
+      return res.status(400).json({ error: 'At least one candidate is required' });
+    }
+
+    if (!emailContent || !emailContent.subject || !emailContent.body) {
+      return res.status(400).json({ error: 'Email content with subject and body is required' });
+    }
+
+    // Prepare email data for each candidate
+    const emailsToSend = candidates.map(candidate => {
+      // Replace placeholders in the email body
+      let personalizedBody = emailContent.body
+        .replace(/\[CANDIDATE_NAME\]/g, candidate.candidateName || candidate.name || 'Candidate')
+        .replace(/\[HR_NAME\]/g, hrInfo?.name || 'HR Team')
+        .replace(/\[HR_TITLE\]/g, hrInfo?.title || 'Human Resources')
+        .replace(/\[COMPANY_NAME\]/g, jobInfo?.company || 'Our Company')
+        .replace(/\[COMPANY_EMAIL\]/g, hrInfo?.email || 'hr@company.com')
+        .replace(/\[COMPANY_PHONE\]/g, hrInfo?.phone || '');
+
+      let personalizedSubject = emailContent.subject
+        .replace(/\[CANDIDATE_NAME\]/g, candidate.candidateName || candidate.name || 'Candidate');
+
+      return {
+        to: candidate.email,
+        subject: personalizedSubject,
+        body: personalizedBody,
+        candidateName: candidate.candidateName || candidate.name,
+        jobTitle: jobInfo?.jobTitle,
+        company: jobInfo?.company
+      };
+    });
+
+    // Send to n8n webhook
+    try {
+      const n8nResponse = await axios.post(N8N_EMAIL_WEBHOOK_URL, {
+        emails: emailsToSend,
+        totalCount: emailsToSend.length,
+        jobInfo: jobInfo,
+        sentAt: new Date().toISOString()
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000 // 30 second timeout
+      });
+
+      res.json({
+        success: true,
+        message: `Successfully queued ${emailsToSend.length} email(s) for sending`,
+        sentCount: emailsToSend.length,
+        n8nResponse: n8nResponse.data
+      });
+    } catch (webhookError) {
+      console.error('n8n webhook error:', webhookError);
+      
+      // Check if n8n is not running or webhook not configured
+      if (webhookError.code === 'ECONNREFUSED') {
+        return res.status(503).json({
+          error: 'Email service (n8n) is not available. Please ensure n8n is running and the webhook is configured.',
+          details: 'Connection refused to n8n webhook URL',
+          webhookUrl: N8N_EMAIL_WEBHOOK_URL
+        });
+      }
+
+      return res.status(500).json({
+        error: 'Failed to send emails via n8n webhook',
+        details: webhookError.message
+      });
+    }
+  } catch (error) {
+    console.error('Send interview emails error:', error);
+    res.status(500).json({ error: error.message || 'Failed to send interview emails' });
+  }
+};
