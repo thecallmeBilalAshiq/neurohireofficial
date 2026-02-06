@@ -657,5 +657,52 @@ export const deleteHR = async (uid, adminToken) => {
   }
 };
 
+// ==========================================
+// Interview Email API Functions
+// ==========================================
+
+// Generate interview/test invitation email using GPT-4o
+export const generateInterviewEmail = async (candidates, jobInfo, emailType, idToken) => {
+  try {
+    const response = await api.post('/llm/generate-interview-email', {
+      candidates,
+      jobInfo,
+      emailType, // 'online_test' or 'interview'
+    }, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to generate interview email',
+    };
+  }
+};
+
+// Send interview emails via n8n webhook
+export const sendInterviewEmails = async (candidates, emailContent, jobInfo, hrInfo, idToken) => {
+  try {
+    const response = await api.post('/llm/send-interview-emails', {
+      candidates,
+      emailContent,
+      jobInfo,
+      hrInfo,
+    }, {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to send interview emails',
+    };
+  }
+};
+
 export default api;
 
