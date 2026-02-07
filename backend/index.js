@@ -15,10 +15,11 @@ const testRoutes = require('./routes/test');
 
 dotenv.config();
 
-// connect database
+const app = express();
+
+// Connect database (runs when module loads, including on Vercel serverless)
 connectDB();
 
-const app = express();
 // CORS configuration - use centralized config
 app.use(cors({ 
   origin: config.frontend.corsOrigin,
@@ -108,4 +109,11 @@ app.use((req, res, next) => {
 });
 
 const PORT = config.backend.port;
-app.listen(PORT, () => console.log(`Server on port ${PORT}`));
+
+// When run directly (e.g. node index.js), start the server.
+// When required (e.g. Vercel serverless), only export the app.
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Server on port ${PORT}`));
+} else {
+  module.exports = app;
+}
