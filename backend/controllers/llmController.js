@@ -408,7 +408,10 @@ IMPORTANT: Return ONLY valid JSON, no additional text or markdown.`;
 // Send interview emails via n8n webhook
 exports.sendInterviewEmails = async (req, res) => {
   try {
-    const { candidates, emailContent, jobInfo, hrInfo } = req.body;
+    const { candidates, emailContent, jobInfo, hrInfo, jobId, emailType } = req.body;
+    const Application = require('../models/Application');
+    const TestInvitation = require('../models/TestInvitation');
+    const config = require('../config/appConfig');
 
     if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
       return res.status(400).json({ error: 'At least one candidate is required' });
@@ -418,9 +421,31 @@ exports.sendInterviewEmails = async (req, res) => {
       return res.status(400).json({ error: 'Email content with subject and body is required' });
     }
 
+    const isOnlineTest = emailType === 'online_test';
+    const frontendUrl = (config.frontend && config.frontend.url) || process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+    const testExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 1 week
+    const invitationMap = {}; // candidate email -> { token, expiresAt } for building email body
+
+    if (isOnlineTest && jobId) {
+      for (const c of candidates) {
+        const applicationId = c._id; // _id in ranked list is application id
+        const app = await Application.findById(applicationId).populate('candidate', '_id');
+        if (!app || !app.candidate) continue;
+        const inv = new TestInvitation({
+          jobPost: jobId,
+          application: applicationId,
+          candidate: app.candidate._id,
+          expiresAt: testExpiresAt,
+        });
+        await inv.save();
+        invitationMap[c.email] = { token: inv.token, expiresAt: testExpiresAt };
+      }
+      // Trigger background generation of MCQ pool and coding questions for this job
+      setImmediate(() => ensureTestQuestionsForJob(jobId).catch(e => console.error('ensureTestQuestionsForJob:', e)));
+    }
+
     // Prepare email data for each candidate
     const emailsToSend = candidates.map(candidate => {
-      // Replace placeholders in the email body
       let personalizedBody = emailContent.body
         .replace(/\[CANDIDATE_NAME\]/g, candidate.candidateName || candidate.name || 'Candidate')
         .replace(/\[HR_NAME\]/g, hrInfo?.name || 'HR Team')
@@ -428,6 +453,15 @@ exports.sendInterviewEmails = async (req, res) => {
         .replace(/\[COMPANY_NAME\]/g, jobInfo?.company || 'Our Company')
         .replace(/\[COMPANY_EMAIL\]/g, hrInfo?.email || 'hr@company.com')
         .replace(/\[COMPANY_PHONE\]/g, hrInfo?.phone || '');
+
+      if (isOnlineTest && invitationMap[candidate.email]) {
+        const { token, expiresAt } = invitationMap[candidate.email];
+        const testLink = `${frontendUrl.replace(/\/$/, '')}/test?token=${token}`;
+        personalizedBody = personalizedBody
+          .replace(/\[TEST_LINK\]/g, testLink)
+          .replace(/\[TEST_DEADLINE\]/g, expiresAt.toLocaleDateString(undefined, { dateStyle: 'long' }))
+          .replace(/\[TEST_DURATION\]/g, '2 hours');
+      }
 
       let personalizedSubject = emailContent.subject
         .replace(/\[CANDIDATE_NAME\]/g, candidate.candidateName || candidate.name || 'Candidate');
@@ -482,5 +516,228 @@ exports.sendInterviewEmails = async (req, res) => {
   } catch (error) {
     console.error('Send interview emails error:', error);
     res.status(500).json({ error: error.message || 'Failed to send interview emails' });
+  }
+};
+
+// ----- Online Test: MCQ & Coding question generation -----
+
+const TestMcqPool = require('../models/TestMcqPool');
+const CodingQuestion = require('../models/CodingQuestion');
+
+function extractTextFromOutput(output) {
+  if (!output) return '';
+  if (typeof output === 'string') return output;
+  const getStr = (v) => (typeof v === 'string' ? v : (v != null ? JSON.stringify(v) : ''));
+  if (output.content) return getStr(output.content);
+  if (output.text) return getStr(output.text);
+  if (output.result) return getStr(output.result);
+  if (output.data) return getStr(output.data);
+  if (output.message && output.message.content) return getStr(output.message.content);
+  if (output.message) return getStr(output.message);
+  if (Array.isArray(output)) return output.map(item => (typeof item === 'string' ? item : (item?.content ?? item?.text ?? JSON.stringify(item)))).join('\n');
+  return JSON.stringify(output);
+}
+
+/** Extract a JSON array from LLM text (handles markdown code blocks and loose JSON). */
+function parseMcqJsonFromLLM(text) {
+  if (!text || typeof text !== 'string') return null;
+  let raw = text.trim();
+  // Strip markdown code blocks
+  raw = raw.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+  // Find the first '[' and then matching ']' by bracket count
+  const start = raw.indexOf('[');
+  if (start !== -1) {
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < raw.length; i++) {
+      if (raw[i] === '[') depth++;
+      else if (raw[i] === ']') {
+        depth--;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    if (end !== -1) {
+      try {
+        return JSON.parse(raw.slice(start, end + 1));
+      } catch (e) {
+        // fall through to object fallback
+      }
+    }
+  }
+  // Fallback: try parsing as object with "questions" or "problems" array
+  try {
+    const obj = JSON.parse(raw);
+    if (Array.isArray(obj)) return obj;
+    if (obj && Array.isArray(obj.questions)) return obj.questions;
+    if (obj && Array.isArray(obj.problems)) return obj.problems;
+    if (obj && Array.isArray(obj.coding_questions)) return obj.coding_questions;
+  } catch (e) {
+    // try finding JSON object with array inside
+    const objMatch = raw.match(/\{[\s\S]*"questions"[\s\S]*\[[\s\S]*\][\s\S]*\}/);
+    if (objMatch) {
+      try {
+        const obj = JSON.parse(objMatch[0]);
+        if (Array.isArray(obj.questions)) return obj.questions;
+      } catch (err) {
+        // ignore
+      }
+    }
+  }
+  return null;
+}
+
+async function generateAndSaveMcqPool(jobId) {
+  const JobPost = require('../models/JobPost');
+  const job = await JobPost.findById(jobId);
+  if (!job) return { ok: false };
+  const skillsStr = (job.skills && job.skills.length) ? job.skills.join(', ') : 'general programming';
+  const desc = job.keyResponsibilities || job.generatedDescription || job.description || '';
+  const prompt = `You are an expert technical interviewer. Generate exactly 100 multiple-choice questions (MCQs) for an online coding/technical test.
+
+Job context:
+- Job title: ${job.jobTitle}
+- Skills/stack: ${skillsStr}
+- Key responsibilities/description: ${desc.slice(0, 1500)}
+
+Requirements:
+- Each question must have exactly 4 options (A, B, C, D).
+- Questions should cover: programming concepts, data structures, algorithms, language-specific knowledge (from the job stack), and problem-solving.
+- Mix difficulty: easy, medium, hard.
+- Return a JSON array of exactly 100 objects. Each object must have:
+  "questionText": string (the question),
+  "options": [string, string, string, string] (exactly 4 options),
+  "correctIndex": number (0 to 3, index of the correct option in "options")
+
+Output ONLY valid JSON array, no markdown or extra text. Example format:
+[{"questionText":"What is the time complexity of binary search?","options":["O(n)","O(log n)","O(n^2)","O(1)"],"correctIndex":1}, ...]`;
+  const result = await model.run(
+    [{ role: 'user', content: prompt }],
+    { max_completion_tokens: 16384 }
+  );
+  if (result && typeof result === 'object' && result.error) {
+    console.error('MCQ pool LLM error:', result.error);
+    return { ok: false, count: 0 };
+  }
+  const output = result?.output ?? result?.content ?? result?.text ?? result;
+  const text = extractTextFromOutput(output);
+  let arr = parseMcqJsonFromLLM(text);
+  if (!Array.isArray(arr)) arr = [];
+  const questions = arr
+    .filter(q => q && q.questionText && Array.isArray(q.options) && q.options.length === 4 && typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex <= 3)
+    .slice(0, 100)
+    .map(q => ({ questionText: q.questionText, options: q.options, correctIndex: q.correctIndex }));
+  if (questions.length < 30) return { ok: false, count: questions.length };
+  await TestMcqPool.findOneAndUpdate({ jobPost: jobId }, { jobPost: jobId, questions }, { upsert: true, new: true });
+  return { ok: true, count: questions.length };
+}
+
+async function ensureTestQuestionsForJob(jobId) {
+  const pool = await TestMcqPool.findOne({ jobPost: jobId });
+  if (!pool || !pool.questions || pool.questions.length < 30) {
+    try {
+      await generateAndSaveMcqPool(jobId);
+    } catch (e) {
+      console.error('Background MCQ pool generation failed:', e);
+    }
+  }
+  const coding = await CodingQuestion.findOne({ jobPost: jobId });
+  if (!coding || !coding.questions || coding.questions.length < 7) {
+    try {
+      await generateAndSaveCodingQuestions(jobId);
+    } catch (e) {
+      console.error('Background coding questions generation failed:', e);
+    }
+  }
+}
+
+async function generateAndSaveCodingQuestions(jobId) {
+  const JobPost = require('../models/JobPost');
+  const job = await JobPost.findById(jobId);
+  if (!job) return { ok: false };
+  const skillsStr = (job.skills && job.skills.length) ? job.skills.join(', ') : 'algorithms and data structures';
+  const prompt = `You are an expert competitive programmer. Generate exactly 7 coding problems for an online test (LeetCode/Codeforces style).
+
+Job: ${job.jobTitle}. Skills: ${skillsStr}.
+
+Rules:
+- Output ONLY a valid JSON array of exactly 7 objects. No markdown, no code fences, no explanation before or after.
+- Each object must have these exact keys (all strings): "title", "statement", "inputFormat", "outputFormat", "sampleInput", "sampleOutput", "constraints", "difficulty".
+- "statement" = full problem description. "difficulty" = one of "easy", "medium", "hard".
+- Mix: 2 easy, 3 medium, 2 hard. Test data structures, algorithms, optimization.
+
+Example format for each object: {"title":"Two Sum","statement":"Given an array of integers, return indices of two numbers that add up to target.","inputFormat":"First line: n. Second line: array. Third: target","outputFormat":"Two space-separated indices","sampleInput":"4","sampleOutput":"0 1","constraints":"2 <= n <= 10000","difficulty":"easy"}
+
+Reply with only the JSON array starting with [ and ending with ].`;
+  const result = await model.run(
+    [{ role: 'user', content: prompt }],
+    { max_completion_tokens: 8192 }
+  );
+  if (result && typeof result === 'object' && result.error) {
+    console.error('Coding questions LLM error:', result.error);
+    return { ok: false, count: 0 };
+  }
+  const output = result?.output ?? result?.content ?? result?.text ?? result;
+  const text = extractTextFromOutput(output);
+  let arr = parseMcqJsonFromLLM(text);
+  if (!Array.isArray(arr)) arr = [];
+  if (arr.length === 0 && text) {
+    console.warn('Coding questions: no array parsed. Response preview:', text.slice(0, 500));
+  }
+  const questions = arr
+    .filter(q => q && (q.title || q.name) && (q.statement || q.description || q.problem || q.body))
+    .slice(0, 7)
+    .map(q => ({
+      title: q.title || q.name || 'Coding Problem',
+      statement: q.statement || q.description || q.problem || q.body || '',
+      inputFormat: q.inputFormat || q.input_format || '',
+      outputFormat: q.outputFormat || q.output_format || '',
+      sampleInput: q.sampleInput || q.sample_input || q.exampleInput || '',
+      sampleOutput: q.sampleOutput || q.sample_output || q.exampleOutput || '',
+      constraints: q.constraints || '',
+      difficulty: ['easy', 'medium', 'hard'].includes(q.difficulty) ? q.difficulty : 'medium',
+    }));
+  if (questions.length < 7) return { ok: false, count: questions.length };
+  await CodingQuestion.findOneAndUpdate({ jobPost: jobId }, { jobPost: jobId, questions }, { upsert: true, new: true });
+  return { ok: true, count: questions.length };
+}
+
+// Generate 100 MCQs for a job (HR/manual trigger)
+exports.generateMcqPool = async (req, res) => {
+  try {
+    if (!model) return res.status(503).json({ error: 'LLM service not available.' });
+    const { jobId } = req.params;
+    const JobPost = require('../models/JobPost');
+    const job = await JobPost.findById(jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    const result = await generateAndSaveMcqPool(jobId);
+    if (!result.ok) {
+      return res.status(500).json({ error: `LLM generated only ${result.count || 0} valid MCQs. Need at least 30.` });
+    }
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Generate MCQ pool error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate MCQ pool' });
+  }
+};
+
+// Generate 7 coding questions for a job (HR/manual trigger)
+exports.generateCodingQuestions = async (req, res) => {
+  try {
+    if (!model) return res.status(503).json({ error: 'LLM service not available.' });
+    const { jobId } = req.params;
+    const JobPost = require('../models/JobPost');
+    const job = await JobPost.findById(jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    const result = await generateAndSaveCodingQuestions(jobId);
+    if (!result.ok) {
+      return res.status(500).json({ error: `LLM generated only ${result.count || 0} coding questions. Need 7.` });
+    }
+    res.json({ success: true, count: result.count });
+  } catch (error) {
+    console.error('Generate coding questions error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate coding questions' });
   }
 };
