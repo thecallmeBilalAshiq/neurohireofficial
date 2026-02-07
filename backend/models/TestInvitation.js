@@ -41,8 +41,7 @@ const testInvitationSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-testInvitationSchema.index({ token: 1 });
+// token already has unique: true; expiresAt already has index: true — no duplicate index()
 testInvitationSchema.index({ candidate: 1, jobPost: 1 });
-testInvitationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL optional, we check manually
 
 module.exports = mongoose.model('TestInvitation', testInvitationSchema);
