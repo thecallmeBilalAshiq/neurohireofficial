@@ -683,13 +683,16 @@ export const generateInterviewEmail = async (candidates, jobInfo, emailType, idT
 };
 
 // Send interview emails via n8n webhook
-export const sendInterviewEmails = async (candidates, emailContent, jobInfo, hrInfo, idToken) => {
+export const sendInterviewEmails = async (candidates, emailContent, jobInfo, hrInfo, idToken, options = {}) => {
   try {
+    const { jobId, emailType } = options;
     const response = await api.post('/llm/send-interview-emails', {
       candidates,
       emailContent,
       jobInfo,
       hrInfo,
+      jobId: jobId || null,
+      emailType: emailType || null,
     }, {
       headers: {
         Authorization: `Bearer ${idToken}`,
@@ -700,6 +703,87 @@ export const sendInterviewEmails = async (candidates, emailContent, jobInfo, hrI
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Failed to send interview emails',
+    };
+  }
+};
+
+// Prepare online test: generate MCQ pool and coding questions for a job (HR)
+export const prepareTestQuestions = async (jobId, idToken) => {
+  try {
+    await Promise.all([
+      api.post(`/llm/generate-mcq-pool/${jobId}`, {}, { headers: { Authorization: `Bearer ${idToken}` } }),
+      api.post(`/llm/generate-coding-questions/${jobId}`, {}, { headers: { Authorization: `Bearer ${idToken}` } }),
+    ]);
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to prepare test questions',
+    };
+  }
+};
+
+// ==========================================
+// Online Test API (public - no auth)
+// ==========================================
+
+export const validateTestToken = async (token) => {
+  try {
+    const response = await api.get('/test/validate-token', { params: { token } });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Invalid or expired link',
+      status: error.response?.data?.status,
+    };
+  }
+};
+
+export const startTest = async (token) => {
+  try {
+    const response = await api.post('/test/start', { token });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to start test',
+    };
+  }
+};
+
+export const getTestAttempt = async (attemptId, token) => {
+  try {
+    const response = await api.get(`/test/attempt/${attemptId}`, { params: { token } });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to load attempt',
+    };
+  }
+};
+
+export const saveTestProgress = async (attemptId, token, payload) => {
+  try {
+    const response = await api.put(`/test/attempt/${attemptId}`, { attemptId, token, ...payload });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to save progress',
+    };
+  }
+};
+
+export const submitTest = async (attemptId, token, payload = {}) => {
+  try {
+    const response = await api.post(`/test/attempt/${attemptId}/submit`, { attemptId, token, ...payload });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to submit test',
     };
   }
 };

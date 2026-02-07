@@ -11,6 +11,7 @@ const socialMediaRoutes = require('./routes/socialMedia');
 const aiImageRoutes = require('./routes/aiImage');
 const applicationRoutes = require('./routes/applications');
 const cvRoutes = require('./routes/cv');
+const testRoutes = require('./routes/test');
 
 dotenv.config();
 
@@ -62,6 +63,7 @@ app.use('/api/social-media', socialMediaRoutes);
 app.use('/api/ai-image', aiImageRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/cv', cvRoutes);
+app.use('/api/test', testRoutes);
 
 
 // Health check endpoint

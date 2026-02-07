@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "../../../components/ProtectedRoute";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
-import { getJobsForRanking, getRankedCandidates, generateInterviewEmail, sendInterviewEmails } from "../../../lib/api";
+import { getJobsForRanking, getRankedCandidates, generateInterviewEmail, sendInterviewEmails, prepareTestQuestions } from "../../../lib/api";
 import { toast } from "react-toastify";
 
 function RankedCandidatesContent() {
@@ -37,6 +37,7 @@ function RankedCandidatesContent() {
     email: "",
     phone: ""
   });
+  const [preparingTest, setPreparingTest] = useState(false);
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem('darkMode');
@@ -203,7 +204,8 @@ function RankedCandidatesContent() {
         generatedEmail,
         jobInfo,
         hrInfo,
-        idToken
+        idToken,
+        { jobId: selectedJobId, emailType }
       );
 
       if (result.success) {
@@ -235,6 +237,26 @@ function RankedCandidatesContent() {
     if (score >= 6) return "bg-yellow-100 text-yellow-800 border-yellow-300";
     if (score >= 4) return "bg-orange-100 text-orange-800 border-orange-300";
     return "bg-red-100 text-red-800 border-red-300";
+  };
+
+  const handlePrepareTest = async () => {
+    if (!selectedJobId || !idToken) {
+      toast.warning("Please select a job first.");
+      return;
+    }
+    setPreparingTest(true);
+    try {
+      const result = await prepareTestQuestions(selectedJobId, idToken);
+      if (result.success) {
+        toast.success("Test questions (MCQ pool + coding) are being generated. You can send online test emails now.");
+      } else {
+        toast.error(result.error || "Failed to prepare test questions");
+      }
+    } catch (e) {
+      toast.error("Failed to prepare test questions");
+    } finally {
+      setPreparingTest(false);
+    }
   };
 
   // Pagination calculations
@@ -342,19 +364,29 @@ function RankedCandidatesContent() {
           <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
             Select Job Post
           </label>
-          <select
-            value={selectedJobId}
-            onChange={(e) => setSelectedJobId(e.target.value)}
-            className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
-            disabled={loading}
-          >
-            <option value="">-- Select a Job --</option>
-            {jobs.map((job) => (
-              <option key={job._id} value={job._id}>
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedJobId}
+              onChange={(e) => setSelectedJobId(e.target.value)}
+              className={`flex-1 min-w-[200px] px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+              disabled={loading}
+            >
+              <option value="">-- Select a Job --</option>
+              {jobs.map((job) => (
+                <option key={job._id} value={job._id}>
                 {job.jobTitle} - {job.company}
               </option>
             ))}
-          </select>
+            </select>
+            <button
+              type="button"
+              onClick={handlePrepareTest}
+              disabled={!selectedJobId || preparingTest || loading}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedJobId && !preparingTest ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+            >
+              {preparingTest ? "Preparing…" : "Prepare online test"}
+            </button>
+          </div>
         </div>
 
         {/* Candidates Display */}
