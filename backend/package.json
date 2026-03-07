@@ -13,6 +13,7 @@
   "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
+    "pdfkit": "^0.15.0",
     "axios": "^1.13.2",
     "bytez.js": "^1.1.18",
     "cors": "^2.8.5",

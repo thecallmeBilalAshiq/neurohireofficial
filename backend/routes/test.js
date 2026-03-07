@@ -17,4 +17,7 @@ router.put('/attempt/:attemptId', testController.saveProgress);
 // Public: submit test
 router.post('/attempt/:attemptId/submit', testController.submitTest);
 
+// Public: run code (for testing code during exam)
+router.post('/run-code', testController.runCode);
+
 module.exports = router;

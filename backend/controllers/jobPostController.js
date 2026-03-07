@@ -5,16 +5,10 @@ const Application = require('../models/Application');
 const { cleanJobDescription } = require('../utils/textCleaner');
 
 // Helper function to update remarks based on deadline
+// NOTE: We now keep `remarks` under explicit HR control (via finalize job),
+// so this helper no longer auto-switches to "completed" when the deadline passes.
+// Dashboard stats already treat jobs with past deadlines as completed for analytics.
 const updateRemarksBasedOnDeadline = async (jobPost) => {
-  const now = new Date();
-  const deadline = new Date(jobPost.deadline);
-  
-  // If deadline has passed and remarks is still 'pending', update to 'completed'
-  if (now >= deadline && jobPost.remarks === 'pending') {
-    jobPost.remarks = 'completed';
-    await jobPost.save();
-  }
-  
   return jobPost;
 };
 

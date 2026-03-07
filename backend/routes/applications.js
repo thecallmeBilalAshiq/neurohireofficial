@@ -64,11 +64,38 @@ router.post('/submit', verifyToken, upload.single('cv'), applicationController.s
 // Get my applications
 router.get('/my-applications', applicationController.getMyApplications);
 
-// Get ranked candidates for a job (HR only)
+// Evaluate all applications for a job after deadline (HR only)
+router.post('/evaluate-job/:jobId', applicationController.evaluateJobApplications);
+
+// Get all applications for a job (HR only) - for instant ranking / pre-deadline view
+router.get('/by-job/:jobId', applicationController.getApplicationsByJob);
+
+// Evaluate one application instantly (HR only) - show 1 candidate ranking; rest ranked after deadline
+router.post('/evaluate-one/:applicationId', applicationController.evaluateOneApplication);
+
+// Get all evaluated candidates for a job so HR can send test emails (HR only)
+router.get('/evaluated-candidates/:jobId', applicationController.getEvaluatedCandidates);
+
+// Get ranked candidates (only those sent test invite) (HR only)
 router.get('/ranked/:jobId', applicationController.getRankedCandidates);
 
 // Get all jobs for ranking selection (HR only)
 router.get('/jobs-for-ranking', applicationController.getJobsForRanking);
+
+// Mark applications as interview invite sent (HR only)
+router.post('/mark-interview-sent/:jobId', applicationController.markInterviewInviteSent);
+
+// Mark selected hires (HR only)
+router.post('/mark-hires/:jobId', applicationController.markSelectedAsHire);
+
+// Finalize job as completed (HR only)
+router.post('/finalize-job/:jobId', applicationController.finalizeJob);
+
+// Generate 3-month training plan PDF for a hire (HR only)
+router.post('/generate-training-plan/:applicationId', applicationController.generateTrainingPlan);
+
+// Download training plan PDF (HR only)
+router.get('/training-plan/:applicationId/download', applicationController.downloadTrainingPlan);
 
 module.exports = router;
 

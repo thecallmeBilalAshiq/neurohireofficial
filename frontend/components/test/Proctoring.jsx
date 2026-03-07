@@ -64,6 +64,7 @@ export default forwardRef(function Proctoring(
   const rafRef = useRef(null);
   const frameCountRef = useRef(0);
   const lastViolationTimeRef = useRef(0);
+  const lastTimestampRef = useRef(0);
 
   const [cameraError, setCameraError] = useState(null);
   const [faceDetected, setFaceDetected] = useState(false);
@@ -194,7 +195,12 @@ export default forwardRef(function Proctoring(
     if (disabled || !faceDetectorRef.current || !videoRef.current) return;
 
     const video = videoRef.current;
-    const ts = () => performance.now();
+    // Single monotonically increasing timestamp per frame (ms). Some delegates require strictly increasing timestamps.
+    const getFrameTimestamp = () => {
+      const t = Math.max(performance.now(), lastTimestampRef.current + 1);
+      lastTimestampRef.current = t;
+      return t;
+    };
 
     const runDetection = () => {
       if (!faceDetectorRef.current || !videoRef.current || video.readyState < 2) {
@@ -211,50 +217,60 @@ export default forwardRef(function Proctoring(
 
       frameCountRef.current += 1;
       const runObjectDetection = frameCountRef.current % OBJECT_DETECT_INTERVAL === 0;
+      const frameTs = getFrameTimestamp();
 
+      let faceDetections = [];
       try {
-        const faceResult = faceDetectorRef.current.detectForVideo(video, ts());
-        const faceDetections = faceResult?.detections ?? [];
-        const faceCount = faceDetections.length;
+        const fd = faceDetectorRef.current;
+        if (fd && typeof fd.detectForVideo === "function") {
+          const faceResult = fd.detectForVideo(video, frameTs);
+          faceDetections = faceResult?.detections ?? [];
+        }
+      } catch (_) {
+        faceDetections = [];
+      }
 
-        setFaceDetected(faceCount >= 1);
-        notifyFaceStatus(faceCount >= 1);
+      const faceCount = faceDetections.length;
+      setFaceDetected(faceCount >= 1);
+      notifyFaceStatus(faceCount >= 1);
 
-        if (faceCount === 0) {
-          setFaceInBounds(true);
-          setEyesInFrame(true);
-          setSingleFace(true);
-        } else if (faceCount > 1) {
-          setSingleFace(false);
-          setFaceInBounds(true);
-          setEyesInFrame(true);
-          recordViolation();
+      if (faceCount === 0) {
+        setFaceInBounds(true);
+        setEyesInFrame(true);
+        setSingleFace(true);
+      } else if (faceCount > 1) {
+        setSingleFace(false);
+        setFaceInBounds(true);
+        setEyesInFrame(true);
+        recordViolation();
+      } else {
+        setSingleFace(true);
+        const box = faceDetections[0].boundingBox;
+        if (box) {
+          const cx = (box.originX ?? 0) + (box.width ?? 0) / 2;
+          const cy = (box.originY ?? 0) + (box.height ?? 0) / 2;
+          const inX = cx >= w * BOUNDS_MARGIN && cx <= w * (1 - BOUNDS_MARGIN);
+          const inY = cy >= h * BOUNDS_MARGIN && cy <= h * (1 - BOUNDS_MARGIN);
+          const faceW = (box.width ?? 0) / w;
+          const faceH = (box.height ?? 0) / h;
+          const sizeOk =
+            faceW >= FACE_MIN_SIZE &&
+            faceW <= FACE_MAX_SIZE &&
+            faceH >= FACE_MIN_SIZE &&
+            faceH <= FACE_MAX_SIZE;
+          const boundsOk = inX && inY && sizeOk;
+          setFaceInBounds(boundsOk);
+          if (!boundsOk) recordViolation();
         } else {
-          setSingleFace(true);
-          const box = faceDetections[0].boundingBox;
-          if (box) {
-            const cx = (box.originX ?? 0) + (box.width ?? 0) / 2;
-            const cy = (box.originY ?? 0) + (box.height ?? 0) / 2;
-            const inX = cx >= w * BOUNDS_MARGIN && cx <= w * (1 - BOUNDS_MARGIN);
-            const inY = cy >= h * BOUNDS_MARGIN && cy <= h * (1 - BOUNDS_MARGIN);
-            const faceW = (box.width ?? 0) / w;
-            const faceH = (box.height ?? 0) / h;
-            const sizeOk =
-              faceW >= FACE_MIN_SIZE &&
-              faceW <= FACE_MAX_SIZE &&
-              faceH >= FACE_MIN_SIZE &&
-              faceH <= FACE_MAX_SIZE;
-            const boundsOk = inX && inY && sizeOk;
-            setFaceInBounds(boundsOk);
-            if (!boundsOk) recordViolation();
-          } else {
-            setFaceInBounds(true);
-          }
+          setFaceInBounds(true);
+        }
 
-          // Eyes in frame via Face Landmarker (normalized 0–1)
-          if (faceLandmarkerRef.current) {
-            try {
-              const landmarkResult = faceLandmarkerRef.current.detectForVideo(video, ts());
+        // Eyes in frame via Face Landmarker (normalized 0–1)
+        if (faceLandmarkerRef.current) {
+          try {
+            const fl = faceLandmarkerRef.current;
+            if (fl && typeof fl.detectForVideo === "function") {
+              const landmarkResult = fl.detectForVideo(video, frameTs);
               const landmarks = landmarkResult?.faceLandmarks?.[0];
               if (landmarks && landmarks.length > Math.max(LEFT_EYE_INDEX, RIGHT_EYE_INDEX)) {
                 const left = landmarks[LEFT_EYE_INDEX];
@@ -271,18 +287,23 @@ export default forwardRef(function Proctoring(
               } else {
                 setEyesInFrame(true);
               }
-            } catch (_) {
+            } else {
               setEyesInFrame(true);
             }
-          } else {
+          } catch (_) {
             setEyesInFrame(true);
           }
+        } else {
+          setEyesInFrame(true);
         }
+      }
 
-        // Object detection: phone, book, laptop, etc.
-        if (runObjectDetection && objectDetectorRef.current) {
-          try {
-            const objResult = objectDetectorRef.current.detectForVideo(video, ts());
+      // Object detection: phone, book, laptop, etc.
+      if (runObjectDetection && objectDetectorRef.current) {
+        try {
+          const od = objectDetectorRef.current;
+          if (od && typeof od.detectForVideo === "function") {
+            const objResult = od.detectForVideo(video, frameTs);
             const detections = objResult?.detections ?? [];
             const forbidden = detections.some(
               (d) =>
@@ -292,15 +313,12 @@ export default forwardRef(function Proctoring(
             );
             setForbiddenObjectDetected(forbidden);
             if (forbidden) recordViolation();
-          } catch (_) {
+          } else {
             setForbiddenObjectDetected(false);
           }
+        } catch (_) {
+          setForbiddenObjectDetected(false);
         }
-      } catch (e) {
-        setFaceDetected(false);
-        notifyFaceStatus(false);
-        setEyesInFrame(true);
-        setForbiddenObjectDetected(false);
       }
 
       rafRef.current = requestAnimationFrame(runDetection);

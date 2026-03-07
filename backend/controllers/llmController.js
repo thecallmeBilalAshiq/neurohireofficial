@@ -427,6 +427,15 @@ exports.sendInterviewEmails = async (req, res) => {
     const invitationMap = {}; // candidate email -> { token, expiresAt } for building email body
 
     if (isOnlineTest && jobId) {
+      // Prepare test first (MCQ pool + coding questions) so it's ready when candidates open the link
+      try {
+        await ensureTestQuestionsForJob(jobId);
+      } catch (e) {
+        console.error('ensureTestQuestionsForJob:', e);
+        return res.status(503).json({
+          error: 'Test could not be prepared (MCQ/coding questions generation failed). Please try again or contact support.',
+        });
+      }
       for (const c of candidates) {
         const applicationId = c._id; // _id in ranked list is application id
         const app = await Application.findById(applicationId).populate('candidate', '_id');
@@ -440,8 +449,6 @@ exports.sendInterviewEmails = async (req, res) => {
         await inv.save();
         invitationMap[c.email] = { token: inv.token, expiresAt: testExpiresAt };
       }
-      // Trigger background generation of MCQ pool and coding questions for this job
-      setImmediate(() => ensureTestQuestionsForJob(jobId).catch(e => console.error('ensureTestQuestionsForJob:', e)));
     }
 
     // Prepare email data for each candidate
@@ -739,5 +746,129 @@ exports.generateCodingQuestions = async (req, res) => {
   } catch (error) {
     console.error('Generate coding questions error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate coding questions' });
+  }
+};
+
+// ----- Online Test: LLM evaluation after submit -----
+const TestAttempt = require('../models/TestAttempt');
+
+/**
+ * Evaluate a submitted test attempt: MCQ score (0-30) + LLM coding score (0-70), then save to attempt.
+ * Called in background after submitTest. attemptId = TestAttempt._id.
+ */
+exports.evaluateTestAttempt = async (attemptId) => {
+  const attempt = await TestAttempt.findById(attemptId).populate('testInvitation');
+  if (!attempt || !attempt.testInvitation || attempt.status !== 'submitted') return;
+
+  const jobId = attempt.testInvitation.jobPost;
+  const mcqPool = await TestMcqPool.findOne({ jobPost: jobId });
+  const codingDoc = await CodingQuestion.findOne({ jobPost: jobId });
+  if (!mcqPool || !mcqPool.questions || !codingDoc || !codingDoc.questions) return;
+
+  let mcqScore = 0;
+  const mcqOrder = attempt.mcqOrder || [];
+  const mcqAnswers = attempt.mcqAnswers || [];
+  for (let i = 0; i < mcqOrder.length; i++) {
+    const poolIdx = mcqOrder[i];
+    const q = mcqPool.questions[poolIdx];
+    if (!q || typeof q.correctIndex !== 'number') continue;
+    const ans = mcqAnswers.find((a) => a.questionIndex === i);
+    const selected = ans && typeof ans.selectedIndex === 'number' ? ans.selectedIndex : -1;
+    if (selected === q.correctIndex) mcqScore += 1;
+  }
+  const maxMcq = 30;
+  mcqScore = Math.min(mcqScore, maxMcq);
+
+  let codingScore = 0;
+  let evaluationSummary = '';
+
+  if (model && codingDoc.questions.length > 0 && attempt.codingSubmissions && attempt.codingSubmissions.length > 0) {
+    const codingSubs = attempt.codingSubmissions;
+    const parts = codingDoc.questions.slice(0, 7).map((q, i) => {
+      const sub = codingSubs[i] || {};
+      return `Problem ${i + 1} (${q.title}):\nStatement: ${(q.statement || '').slice(0, 500)}\nSample I/O: ${q.sampleInput || ''} -> ${q.sampleOutput || ''}\nCandidate code (${sub.language || 'javascript'}):\n${(sub.code || '').slice(0, 2000)}`;
+    }).join('\n\n---\n\n');
+
+    const prompt = `You are grading a coding test. The test has 7 problems. Score the candidate's solutions.
+
+${parts}
+
+Score each of the 7 solutions from 0 to 10 (0=wrong/empty, 10=excellent). Consider: correctness of logic, code quality, handling edge cases.
+Reply with ONLY a JSON object (no markdown): { "scores": [n1, n2, n3, n4, n5, n6, n7], "totalCodingScore": number (sum of scores, max 70), "feedback": "one short paragraph" }`;
+
+    try {
+      const result = await model.run(
+        [{ role: 'user', content: prompt }],
+        { max_completion_tokens: 1024 }
+      );
+      const output = result?.output ?? result?.content ?? result?.text ?? result;
+      const text = extractTextFromOutput(output);
+      let raw = text.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
+      const objMatch = raw.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        const obj = JSON.parse(objMatch[0]);
+        const scores = obj.scores;
+        if (Array.isArray(scores)) {
+          const sum = scores.reduce((a, b) => a + (Number(b) || 0), 0);
+          codingScore = Math.min(70, Math.max(0, Math.round(sum)));
+        } else if (typeof obj.totalCodingScore === 'number') {
+          codingScore = Math.min(70, Math.max(0, Math.round(obj.totalCodingScore)));
+        }
+        if (typeof obj.feedback === 'string') evaluationSummary = obj.feedback.slice(0, 500);
+      }
+    } catch (e) {
+      console.error('LLM coding evaluation error:', e);
+      evaluationSummary = 'Evaluation could not be completed.';
+    }
+  }
+
+  const totalScore = Math.min(100, mcqScore + codingScore);
+  await TestAttempt.updateOne(
+    { _id: attemptId },
+    {
+      mcqScore,
+      codingScore,
+      testScore: totalScore,
+      evaluationSummary: evaluationSummary || null,
+      evaluatedAt: new Date(),
+    }
+  );
+};
+
+/**
+ * Generate 3-month training plan text for a hired candidate (industry standard practices).
+ * Used for PDF export. Returns plain text or markdown.
+ */
+exports.generateTrainingPlanContent = async (application, jobPost) => {
+  if (!model) return null;
+  const candidateName = application.formData?.firstName && application.formData?.lastName
+    ? `${application.formData.firstName} ${application.formData.lastName}`
+    : application.candidate?.name || 'Candidate';
+  const jobTitle = jobPost.jobTitle || 'Role';
+  const company = jobPost.company || 'Company';
+  const skills = (jobPost.skills && jobPost.skills.length) ? jobPost.skills.join(', ') : 'role-specific skills';
+  const prompt = `You are an HR training specialist. Generate a 3-month (12-week) training plan for a new hire to meet industry standard practices.
+
+Candidate name: ${candidateName}
+Job title: ${jobTitle}
+Company: ${company}
+Key skills for role: ${skills}
+
+Output a clear, professional training plan with:
+1. Title: "3-Month Training Plan - [Job Title]"
+2. Objective (2-3 sentences)
+3. Month 1: Orientation & foundations (weeks 1-4) - specific goals and deliverables
+4. Month 2: Core competencies & projects (weeks 5-8) - specific goals and deliverables
+5. Month 3: Independence & best practices (weeks 9-12) - specific goals and deliverables
+6. Success criteria and review milestones
+
+Use plain text with clear headings. Keep each section concise but actionable. No markdown code blocks.`;
+  try {
+    const result = await model.run([{ role: 'user', content: prompt }], { max_completion_tokens: 2048 });
+    const output = result?.output ?? result?.content ?? result?.text ?? result;
+    return extractTextFromOutput(output) || 'Training plan could not be generated.';
+  } catch (e) {
+    console.error('Training plan LLM error:', e);
+    return null;
   }
 };

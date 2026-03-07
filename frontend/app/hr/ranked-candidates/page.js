@@ -5,7 +5,23 @@ import { useRouter } from "next/navigation";
 import ProtectedRoute from "../../../components/ProtectedRoute";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
-import { getJobsForRanking, getRankedCandidates, generateInterviewEmail, sendInterviewEmails, prepareTestQuestions } from "../../../lib/api";
+import {
+  getJobsForRanking,
+  getRankedCandidates,
+  getEvaluatedCandidates,
+  getApplicationsByJob,
+  evaluateJobApplications,
+  evaluateOneApplication,
+  generateInterviewEmail,
+  sendInterviewEmails,
+  prepareTestQuestions,
+  markInterviewInviteSent,
+  markSelectedAsHire,
+  finalizeJob,
+  generateTrainingPlan,
+  getApiBaseUrl,
+  updateJobPost,
+} from "../../../lib/api";
 import { toast } from "react-toastify";
 
 function RankedCandidatesContent() {
@@ -38,6 +54,14 @@ function RankedCandidatesContent() {
     phone: ""
   });
   const [preparingTest, setPreparingTest] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
+  const [jobMeta, setJobMeta] = useState(null);
+  const [viewMode, setViewMode] = useState("ranked");
+  const [generatingPdfForAppId, setGeneratingPdfForAppId] = useState(null);
+  const [finalizing, setFinalizing] = useState(false);
+  const [evaluatingOneId, setEvaluatingOneId] = useState(null);
+  const [deadlineInput, setDeadlineInput] = useState("");
+  const [updatingDeadline, setUpdatingDeadline] = useState(false);
 
   useEffect(() => {
     const savedDarkMode = localStorage.getItem('darkMode');
@@ -84,6 +108,8 @@ function RankedCandidatesContent() {
     if (!jobId) {
       setCandidates([]);
       setJobInfo(null);
+      setJobMeta(null);
+      setViewMode("ranked");
       setCurrentPage(1);
       setSelectedCandidates([]);
       setSelectAll(false);
@@ -94,12 +120,40 @@ function RankedCandidatesContent() {
       setLoading(true);
       const result = await getRankedCandidates(jobId, idToken);
       if (result.success) {
-        const sortedCandidates = (result.data.candidates || []).sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
-        setCandidates(sortedCandidates);
+        const list = result.data.candidates || [];
+        setJobMeta({
+          deadline: result.data.deadline,
+          evaluatedAt: result.data.evaluatedAt,
+          remarks: result.data.remarks,
+        });
         setJobInfo({
           jobTitle: result.data.jobTitle,
-          company: result.data.company
+          company: result.data.company,
         });
+        if (list.length > 0) {
+          const sorted = [...list].sort((a, b) => (b.totalScore || 0) - (a.totalScore || 0));
+          setCandidates(sorted);
+          setViewMode("ranked");
+        } else if (result.data.evaluatedAt) {
+          const evalResult = await getEvaluatedCandidates(jobId, idToken);
+          if (evalResult.success && (evalResult.data.candidates || []).length > 0) {
+            setCandidates(evalResult.data.candidates || []);
+            setViewMode("evaluated");
+          } else {
+            setCandidates([]);
+            setViewMode("ranked");
+          }
+        } else {
+          const byJobResult = await getApplicationsByJob(jobId, idToken);
+          if (byJobResult.success && (byJobResult.data.candidates || []).length > 0) {
+            const apps = (byJobResult.data.candidates || []).sort((a, b) => (b.totalScore ?? -1) - (a.totalScore ?? -1));
+            setCandidates(apps);
+            setViewMode("applicants");
+          } else {
+            setCandidates([]);
+            setViewMode("ranked");
+          }
+        }
         setCurrentPage(1);
         setSelectedCandidates([]);
         setSelectAll(false);
@@ -107,14 +161,146 @@ function RankedCandidatesContent() {
         toast.error(result.error || "Failed to fetch ranked candidates");
         setCandidates([]);
         setJobInfo(null);
+        setJobMeta(null);
       }
     } catch (error) {
       console.error("Error fetching ranked candidates:", error);
       toast.error("Failed to fetch ranked candidates");
       setCandidates([]);
       setJobInfo(null);
+      setJobMeta(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEvaluateJob = async () => {
+    if (!selectedJobId || !idToken) return;
+    setEvaluating(true);
+    try {
+      const result = await evaluateJobApplications(selectedJobId, idToken);
+      if (result.success) {
+        toast.success(result.data?.message || "Applications evaluated.");
+        fetchJobs(idToken);
+        fetchRankedCandidates(selectedJobId);
+      } else {
+        toast.error(result.error || "Evaluation failed");
+      }
+    } catch (e) {
+      toast.error("Evaluation failed");
+    } finally {
+      setEvaluating(false);
+    }
+  };
+
+  const handleShowInstantRanking = async (applicationId) => {
+    if (!idToken) return;
+    setEvaluatingOneId(applicationId);
+    try {
+      const result = await evaluateOneApplication(applicationId, idToken);
+      if (result.success) {
+        toast.success("Instant ranking done. This candidate is scored; rest will be ranked after deadline.");
+        fetchRankedCandidates(selectedJobId);
+      } else {
+        toast.error(result.error || "Evaluation failed");
+      }
+    } catch (e) {
+      toast.error("Evaluation failed");
+    } finally {
+      setEvaluatingOneId(null);
+    }
+  };
+
+  const handleMarkInterviewSent = async () => {
+    if (!selectedJobId || !idToken || selectedCandidates.length === 0) return;
+    setIsSendingEmails(true);
+    try {
+      const appIds = selectedCandidates.map((c) => c._id);
+      const result = await markInterviewInviteSent(selectedJobId, appIds, idToken);
+      if (result.success) {
+        toast.success("Interview invite marked as sent.");
+        setShowConfirmModal(false);
+        setShowEmailModal(false);
+        setSelectedCandidates([]);
+        fetchRankedCandidates(selectedJobId);
+      } else toast.error(result.error || "Failed");
+    } catch (e) {
+      toast.error("Failed to mark interview sent");
+    } finally {
+      setIsSendingEmails(false);
+    }
+  };
+
+  const handleSaveHires = async () => {
+    if (!selectedJobId || !idToken) return;
+    try {
+      const appIds = selectedCandidates.map((c) => c._id);
+      const result = await markSelectedAsHire(selectedJobId, appIds, idToken);
+      if (result.success) {
+        toast.success("Selected hires saved.");
+        setSelectedCandidates([]);
+        fetchRankedCandidates(selectedJobId);
+      } else toast.error(result.error || "Failed");
+    } catch (e) {
+      toast.error("Failed to update hires");
+    }
+  };
+
+  const handleGenerateTrainingPlan = async (applicationId) => {
+    if (!idToken) return;
+    setGeneratingPdfForAppId(applicationId);
+    try {
+      const result = await generateTrainingPlan(applicationId, idToken);
+      if (result.success) {
+        toast.success("Training plan generated. Use Download PDF to get the file.");
+        fetchRankedCandidates(selectedJobId);
+      } else toast.error(result.error || "Failed to generate PDF");
+    } catch (e) {
+      toast.error("Failed to generate training plan");
+    } finally {
+      setGeneratingPdfForAppId(null);
+    }
+  };
+
+  const handleDownloadTrainingPlan = (applicationId, candidateName) => {
+    if (!idToken) return;
+    const url = `${getApiBaseUrl()}/applications/training-plan/${applicationId}/download`;
+    const headers = {
+      Authorization: `Bearer ${idToken}`,
+      "ngrok-skip-browser-warning": "true",
+    };
+    fetch(url, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error("Download failed");
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("text/html")) throw new Error("Got HTML instead of PDF (ngrok?). Try again.");
+        return res.blob();
+      })
+      .then((blob) => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `training-plan-${candidateName || applicationId}.pdf`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(() => toast.error("Failed to download PDF"));
+  };
+
+  const handleFinalizeJob = async () => {
+    if (!selectedJobId || !idToken) return;
+    if (!confirm("Finalize this job? It will be marked as completed.")) return;
+    setFinalizing(true);
+    try {
+      const result = await finalizeJob(selectedJobId, idToken);
+      if (result.success) {
+        toast.success("Job finalized and completed.");
+        fetchJobs(idToken);
+        setJobMeta((m) => (m ? { ...m, remarks: "completed" } : null));
+      } else toast.error(result.error || "Failed");
+    } catch (e) {
+      toast.error("Failed to finalize job");
+    } finally {
+      setFinalizing(false);
     }
   };
 
@@ -123,6 +309,23 @@ function RankedCandidatesContent() {
       fetchRankedCandidates(selectedJobId);
     }
   }, [selectedJobId, idToken]);
+
+  // Keep deadline input in sync with jobMeta
+  useEffect(() => {
+    if (jobMeta?.deadline) {
+      try {
+        const d = new Date(jobMeta.deadline);
+        // Format to yyyy-MM-ddTHH:mm for datetime-local
+        const iso = d.toISOString();
+        const value = iso.slice(0, 16);
+        setDeadlineInput(value);
+      } catch {
+        setDeadlineInput("");
+      }
+    } else {
+      setDeadlineInput("");
+    }
+  }, [jobMeta?.deadline]);
 
   // Selection handlers
   const handleSelectCandidate = (candidate) => {
@@ -210,10 +413,16 @@ function RankedCandidatesContent() {
 
       if (result.success) {
         toast.success(`Successfully sent ${result.data.sentCount} email(s)!`);
+        if (emailType === "interview" && selectedJobId && selectedCandidates.length > 0) {
+          const appIds = selectedCandidates.map((c) => c._id);
+          await markInterviewInviteSent(selectedJobId, appIds, idToken);
+        }
+        setShowConfirmModal(false);
         setShowEmailModal(false);
         setGeneratedEmail({ subject: "", body: "" });
         setSelectedCandidates([]);
         setSelectAll(false);
+        fetchRankedCandidates(selectedJobId);
       } else {
         toast.error(result.error || "Failed to send emails");
       }
@@ -256,6 +465,30 @@ function RankedCandidatesContent() {
       toast.error("Failed to prepare test questions");
     } finally {
       setPreparingTest(false);
+    }
+  };
+
+  const handleUpdateDeadline = async () => {
+    if (!selectedJobId || !idToken || !deadlineInput) {
+      toast.warning("Please select a job and choose a deadline date & time.");
+      return;
+    }
+    setUpdatingDeadline(true);
+    try {
+      const newDeadline = new Date(deadlineInput).toISOString();
+      const result = await updateJobPost(selectedJobId, { deadline: newDeadline }, idToken);
+      if (result.success) {
+        toast.success("Deadline updated.");
+        // Refresh jobs and current job meta
+        fetchJobs(idToken);
+        setJobMeta((prev) => prev ? { ...prev, deadline: result.data.deadline } : prev);
+      } else {
+        toast.error(result.error || "Failed to update deadline");
+      }
+    } catch (e) {
+      toast.error("Failed to update deadline");
+    } finally {
+      setUpdatingDeadline(false);
     }
   };
 
@@ -374,19 +607,70 @@ function RankedCandidatesContent() {
               <option value="">-- Select a Job --</option>
               {jobs.map((job) => (
                 <option key={job._id} value={job._id}>
-                {job.jobTitle} - {job.company}
-              </option>
-            ))}
+                  {job.jobTitle} - {job.company}
+                  {job.evaluatedAt ? " (evaluated)" : job.deadline && new Date(job.deadline) < new Date() ? " (deadline passed)" : ""}
+                </option>
+              ))}
             </select>
-            <button
-              type="button"
-              onClick={handlePrepareTest}
-              disabled={!selectedJobId || preparingTest || loading}
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${selectedJobId && !preparingTest ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
-            >
-              {preparingTest ? "Preparing…" : "Prepare online test"}
-            </button>
+            {selectedJobId && jobMeta && !jobMeta.evaluatedAt && jobMeta.deadline && new Date(jobMeta.deadline) < new Date() && (
+              <button
+                type="button"
+                onClick={handleEvaluateJob}
+                disabled={evaluating || loading}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {evaluating ? "Evaluating…" : "Evaluate applications"}
+              </button>
+            )}
+            {selectedJobId && jobMeta?.evaluatedAt && viewMode === "ranked" && (
+              <button
+                type="button"
+                onClick={handlePrepareTest}
+                disabled={preparingTest || loading}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+              >
+                {preparingTest ? "Preparing…" : "Prepare online test"}
+              </button>
+            )}
           </div>
+          {selectedJobId && (
+            <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,2fr),auto] items-end">
+              <div>
+                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-1`}>
+                  Application deadline (date & time)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={deadlineInput}
+                  onChange={(e) => setDeadlineInput(e.target.value)}
+                  className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm`}
+                />
+                {jobMeta?.deadline && (
+                  <p className={`mt-1 text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                    Current deadline: {new Date(jobMeta.deadline).toLocaleString()}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleUpdateDeadline}
+                disabled={updatingDeadline}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {updatingDeadline ? "Updating…" : "Update deadline"}
+              </button>
+            </div>
+          )}
+          {viewMode === "evaluated" && candidates.length > 0 && (
+            <p className={`mt-2 text-sm ${darkMode ? "text-amber-300" : "text-amber-700"}`}>
+              Select candidates below and send &quot;Online test&quot; email to see them in ranked view with test scores.
+            </p>
+          )}
+          {viewMode === "applicants" && candidates.length > 0 && (
+            <p className={`mt-2 text-sm ${darkMode ? "text-sky-300" : "text-sky-700"}`}>
+              Use &quot;Show instant ranking&quot; on one candidate to evaluate them now; the rest will be ranked after the application deadline.
+            </p>
+          )}
         </div>
 
         {/* Candidates Display */}
@@ -508,17 +792,51 @@ function RankedCandidatesContent() {
                               </div>
                             </div>
 
-                            {/* Total Score Badge */}
-                            <div className={`flex-shrink-0 px-3 py-1.5 text-sm font-bold rounded-lg shadow-sm border ${
-                              (candidate.totalScore || 0) >= 8 
-                                ? 'bg-green-500 text-white border-green-600' 
-                                : (candidate.totalScore || 0) >= 6 
-                                  ? 'bg-yellow-500 text-white border-yellow-600'
-                                  : (candidate.totalScore || 0) >= 4
-                                    ? 'bg-orange-500 text-white border-orange-600'
-                                    : 'bg-red-500 text-white border-red-600'
-                            }`}>
-                              {(candidate.totalScore || 0).toFixed(1)}
+                            {/* Total Score + Test Score Badges / Instant ranking */}
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              {viewMode === "applicants" ? (
+                                candidate.rankedAt ? (
+                                  <div className={`px-3 py-1.5 text-sm font-bold rounded-lg shadow-sm border ${
+                                    (candidate.totalScore || 0) >= 8 ? "bg-green-500 text-white border-green-600" :
+                                    (candidate.totalScore || 0) >= 6 ? "bg-yellow-500 text-white border-yellow-600" :
+                                    (candidate.totalScore || 0) >= 4 ? "bg-orange-500 text-white border-orange-600" : "bg-red-500 text-white border-red-600"
+                                  }`}>
+                                    {(candidate.totalScore ?? 0).toFixed(1)}
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleShowInstantRanking(candidate._id); }}
+                                    disabled={!!evaluatingOneId}
+                                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+                                  >
+                                    {evaluatingOneId === candidate._id ? "Evaluating…" : "Show instant ranking"}
+                                  </button>
+                                )
+                              ) : (
+                                <>
+                                  {candidate.testStatus !== undefined && (
+                                    <span className={`px-2 py-1 text-xs font-semibold rounded border ${
+                                      candidate.testStatus === "pending"
+                                        ? "bg-amber-500/80 text-white border-amber-600"
+                                        : (candidate.testScore || 0) >= 70
+                                          ? "bg-teal-500 text-white border-teal-600"
+                                          : (candidate.testScore || 0) >= 50
+                                            ? "bg-teal-400/80 text-white border-teal-500"
+                                            : "bg-slate-500 text-white border-slate-600"
+                                    }`} title="Online test score">
+                                      Test: {candidate.testStatus === "pending" ? "Pending" : candidate.testScore}
+                                    </span>
+                                  )}
+                                  <div className={`px-3 py-1.5 text-sm font-bold rounded-lg shadow-sm border ${
+                                    (candidate.totalScore || 0) >= 8 ? "bg-green-500 text-white border-green-600" :
+                                    (candidate.totalScore || 0) >= 6 ? "bg-yellow-500 text-white border-yellow-600" :
+                                    (candidate.totalScore || 0) >= 4 ? "bg-orange-500 text-white border-orange-600" : "bg-red-500 text-white border-red-600"
+                                  }`}>
+                                    {(candidate.totalScore || 0).toFixed(1)}
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -545,37 +863,97 @@ function RankedCandidatesContent() {
 
                         {/* Scores Grid */}
                         <div className="p-4">
-                          <div className="grid grid-cols-5 gap-2">
+                          <div className="grid grid-cols-6 gap-2">
                             {[
                               { label: 'Exp', score: candidate.experienceScore },
                               { label: 'Proj', score: candidate.projectsScore },
                               { label: 'Skills', score: candidate.skillsScore },
                               { label: 'Cert', score: candidate.certificatesScore },
                               { label: 'Edu', score: candidate.educationScore },
+                              { label: 'Test', score: candidate.testScore },
                             ].map((item, idx) => (
                               <div key={idx} className="text-center">
                                 <div className={`text-[10px] uppercase tracking-wide mb-1 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}>
                                   {item.label}
                                 </div>
                                 <div className={`text-sm font-semibold px-2 py-1 rounded ${
-                                  (item.score || 0) >= 8 
-                                    ? 'bg-green-100 text-green-700' 
-                                    : (item.score || 0) >= 6 
-                                      ? 'bg-yellow-100 text-yellow-700'
-                                      : (item.score || 0) >= 4
-                                        ? 'bg-orange-100 text-orange-700'
-                                        : 'bg-red-100 text-red-700'
+                                  item.score == null && item.label === 'Test'
+                                    ? darkMode ? 'bg-gray-700 text-gray-500' : 'bg-gray-100 text-gray-400'
+                                    : (item.score || 0) >= 8 
+                                      ? 'bg-green-100 text-green-700' 
+                                      : (item.score || 0) >= 6 
+                                        ? 'bg-yellow-100 text-yellow-700'
+                                        : (item.score || 0) >= 4
+                                          ? 'bg-orange-100 text-orange-700'
+                                          : 'bg-red-100 text-red-700'
                                 }`}>
-                                  {(item.score || 0).toFixed(1)}
+                                  {item.label === 'Test' && item.score == null ? '—' : item.label === 'Test' ? (item.score ?? 0) : (item.score ?? 0).toFixed(1)}
                                 </div>
                               </div>
                             ))}
                           </div>
+                          {candidate.testEvaluationSummary && (
+                            <p className={`mt-2 text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'} line-clamp-2`} title={candidate.testEvaluationSummary}>
+                              {candidate.testEvaluationSummary}
+                            </p>
+                          )}
+                          {viewMode === "ranked" && (candidate.selectedAsHire || candidate.interviewInviteSentAt) && (
+                            <div className={`mt-3 pt-3 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+                              {candidate.selectedAsHire && (
+                                <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${darkMode ? 'bg-emerald-800 text-emerald-200' : 'bg-emerald-100 text-emerald-800'}`}>
+                                  Selected as hire
+                                </span>
+                              )}
+                              {candidate.selectedAsHire && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleGenerateTrainingPlan(candidate._id); }}
+                                    disabled={!!generatingPdfForAppId}
+                                    className="text-xs px-2 py-1 rounded bg-slate-600 text-white hover:bg-slate-700 disabled:opacity-50"
+                                  >
+                                    {generatingPdfForAppId === candidate._id ? "Generating…" : "Generate training plan"}
+                                  </button>
+                                  {candidate.trainingPlanPdfPath && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleDownloadTrainingPlan(candidate._id, candidate.candidateName); }}
+                                      className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700"
+                                    >
+                                      Download PDF
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Hires & Finalize (ranked view only, job not completed) */}
+                {viewMode === "ranked" && jobMeta?.remarks !== "completed" && (
+                  <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-4 mb-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'} flex flex-wrap items-center gap-3`}>
+                    <button
+                      type="button"
+                      onClick={handleSaveHires}
+                      disabled={selectedCandidates.length === 0}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      Save selected as final hires
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleFinalizeJob}
+                      disabled={finalizing}
+                      className="px-4 py-2 rounded-lg text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      {finalizing ? "Finalizing…" : "Finalize job (mark completed)"}
+                    </button>
+                  </div>
+                )}
 
                 {/* Pagination Controls */}
                 {totalPages > 1 && (

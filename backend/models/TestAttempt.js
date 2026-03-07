@@ -31,6 +31,12 @@ const testAttemptSchema = new mongoose.Schema({
     payload: mongoose.Schema.Types.Mixed,
   }],
   violationCount: { type: Number, default: 0 },
+  // LLM evaluation (set after submit)
+  testScore: { type: Number, default: null },       // 0-100 total
+  mcqScore: { type: Number, default: null },         // 0-30
+  codingScore: { type: Number, default: null },     // 0-70
+  evaluationSummary: { type: String, default: null },
+  evaluatedAt: { type: Date, default: null },
 }, {
   timestamps: true,
 });

@@ -56,7 +56,10 @@ const applicationSchema = new mongoose.Schema({
   rankedAt: {
     type: Date,
     default: null
-  }
+  },
+  interviewInviteSentAt: { type: Date, default: null },
+  selectedAsHire: { type: Boolean, default: false },
+  trainingPlanPdfPath: { type: String, default: null },
 }, {
   timestamps: true,
 });

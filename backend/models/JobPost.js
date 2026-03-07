@@ -58,6 +58,7 @@ const jobPostSchema = new mongoose.Schema({
     enum: ['pending', 'completed', 'deleted'],
     default: 'pending' 
   },
+  evaluatedAt: { type: Date, default: null },
   createdBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
