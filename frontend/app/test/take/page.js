@@ -6,6 +6,7 @@ import {
   getTestAttempt,
   saveTestProgress,
   submitTest,
+  runCode,
 } from "../../../lib/api";
 import { toast } from "react-toastify";
 import Proctoring from "../../../components/test/Proctoring";
@@ -32,6 +33,9 @@ function TestTakeContent() {
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(TOTAL_MINUTES * 60);
   const [testPaused, setTestPaused] = useState(false);
   const [faceDetected, setFaceDetected] = useState(false);
+  const [runOutputByQuestion, setRunOutputByQuestion] = useState({});
+  const [runLoadingByQuestion, setRunLoadingByQuestion] = useState({});
+  const [runStdinByQuestion, setRunStdinByQuestion] = useState({});
   const tabSwitchCountRef = useRef(0);
   const saveIntervalRef = useRef(null);
   const proctoringRef = useRef(null);
@@ -124,6 +128,37 @@ function TestTakeContent() {
       return next;
     });
   };
+
+  const handleRunCode = async (questionIndex, sampleInput = "") => {
+    const sub = (codingSubmissions[questionIndex] || {});
+    const code = sub.code || "";
+    const language = sub.language || "javascript";
+    if (!code.trim()) {
+      setRunOutputByQuestion((prev) => ({ ...prev, [questionIndex]: { error: "No code to run." } }));
+      return;
+    }
+    setRunLoadingByQuestion((prev) => ({ ...prev, [questionIndex]: true }));
+    setRunOutputByQuestion((prev) => ({ ...prev, [questionIndex]: null }));
+    const result = await runCode(language, code, sampleInput);
+    setRunLoadingByQuestion((prev) => ({ ...prev, [questionIndex]: false }));
+    if (result.success && result.data) {
+      setRunOutputByQuestion((prev) => ({
+        ...prev,
+        [questionIndex]: {
+          stdout: result.data.stdout || "",
+          stderr: result.data.stderr || "",
+          exitCode: result.data.exitCode,
+          error: result.data.error,
+        },
+      }));
+    } else {
+      setRunOutputByQuestion((prev) => ({
+        ...prev,
+        [questionIndex]: { error: result.error || "Run failed." },
+      }));
+    }
+  };
+  const getStdinForQuestion = (i) => runStdinByQuestion[i] !== undefined ? runStdinByQuestion[i] : (codingQuestions[i]?.sampleInput || "");
 
   const handleTabSwitch = useCallback(() => {
     tabSwitchCountRef.current += 1;
@@ -357,35 +392,86 @@ function TestTakeContent() {
 
         {section === "coding" && (
           <div className="max-w-4xl mx-auto space-y-6">
-            {codingQuestions.map((q, i) => (
-              <div
-                key={i}
-                className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"
-              >
-                <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-                  <span className="font-medium text-slate-800 dark:text-white">{q.title}</span>
-                  <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({q.difficulty})</span>
+            {codingQuestions.map((q, i) => {
+              const sub = codingSubmissions[i] || {};
+              const runOut = runOutputByQuestion[i];
+              const runLoading = runLoadingByQuestion[i];
+              return (
+                <div
+                  key={i}
+                  className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+                >
+                  <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
+                    <span className="font-medium text-slate-800 dark:text-white">{q.title}</span>
+                    <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({q.difficulty})</span>
+                  </div>
+                  <div className="p-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
+                    <div>{q.statement}</div>
+                    {q.inputFormat && <div><strong>Input:</strong> {q.inputFormat}</div>}
+                    {q.outputFormat && <div><strong>Output:</strong> {q.outputFormat}</div>}
+                    {q.sampleInput && <div><strong>Sample input:</strong><pre className="bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">{q.sampleInput}</pre></div>}
+                    {q.sampleOutput && <div><strong>Sample output:</strong><pre className="bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">{q.sampleOutput}</pre></div>}
+                    {q.constraints && <div><strong>Constraints:</strong> {q.constraints}</div>}
+                  </div>
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-700 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Language</label>
+                      <select
+                        value={sub.language || "javascript"}
+                        onChange={(e) => handleCodingChange(i, sub.code, e.target.value)}
+                        className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-sm px-2 py-1"
+                      >
+                        <option value="javascript">JavaScript</option>
+                        <option value="python">Python</option>
+                      </select>
+                    </div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Your code</label>
+                    <textarea
+                      value={sub.code || ""}
+                      onChange={(e) => handleCodingChange(i, e.target.value)}
+                      className="w-full h-40 font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-3 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      placeholder="Write your solution here..."
+                      spellCheck={false}
+                    />
+                    <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-end">
+                      <div className="flex-1 w-full min-w-0">
+                        <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Custom input (optional)</label>
+                        <textarea
+                          placeholder="Paste sample input to test your code..."
+                          className="w-full h-20 font-mono text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-2"
+                          value={getStdinForQuestion(i)}
+                          onChange={(e) => setRunStdinByQuestion((prev) => ({ ...prev, [i]: e.target.value }))}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRunCode(i, getStdinForQuestion(i))}
+                        disabled={runLoading || status !== "in_progress"}
+                        className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      >
+                        {runLoading ? "Running…" : "Run code"}
+                      </button>
+                    </div>
+                    {runOut && (
+                      <div className="rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden">
+                        <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">Output</div>
+                        <pre className="p-3 font-mono text-sm bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 min-h-[60px] max-h-48 overflow-auto whitespace-pre-wrap break-words">
+                          {runOut.error && <span className="text-red-600 dark:text-red-400">{runOut.error}</span>}
+                          {runOut.stderr && <span className="text-amber-600 dark:text-amber-400">{runOut.stderr}</span>}
+                          {runOut.stdout != null && runOut.stdout !== "" && runOut.stdout}
+                          {runOut.exitCode != null && runOut.exitCode !== 0 && !runOut.stderr && !runOut.error && (
+                            <span className="text-slate-500">Exit code: {runOut.exitCode}</span>
+                          )}
+                          {!runOut.error && !runOut.stderr && (runOut.stdout == null || runOut.stdout === "") && runOut.exitCode === 0 && (
+                            <span className="text-slate-500">(no output)</span>
+                          )}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="p-4 space-y-3 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap">
-                  <div>{q.statement}</div>
-                  {q.inputFormat && <div><strong>Input:</strong> {q.inputFormat}</div>}
-                  {q.outputFormat && <div><strong>Output:</strong> {q.outputFormat}</div>}
-                  {q.sampleInput && <div><strong>Sample input:</strong><pre className="bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">{q.sampleInput}</pre></div>}
-                  {q.sampleOutput && <div><strong>Sample output:</strong><pre className="bg-slate-100 dark:bg-slate-700 p-2 rounded mt-1">{q.sampleOutput}</pre></div>}
-                  {q.constraints && <div><strong>Constraints:</strong> {q.constraints}</div>}
-                </div>
-                <div className="p-4 border-t border-slate-200 dark:border-slate-700">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Your code</label>
-                  <textarea
-                    value={(codingSubmissions[i] || {}).code || ""}
-                    onChange={(e) => handleCodingChange(i, e.target.value)}
-                    className="w-full h-40 font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-3 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                    placeholder="Write your solution here..."
-                    spellCheck={false}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

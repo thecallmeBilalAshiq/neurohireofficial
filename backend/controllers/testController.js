@@ -3,6 +3,7 @@ const TestAttempt = require('../models/TestAttempt');
 const TestMcqPool = require('../models/TestMcqPool');
 const CodingQuestion = require('../models/CodingQuestion');
 const JobPost = require('../models/JobPost');
+const { runCode } = require('../services/codeRunService');
 
 const TEST_DURATION_MINUTES = 120;
 const MAX_VIOLATIONS_BEFORE_DISQUALIFY = 5;
@@ -239,7 +240,28 @@ exports.saveProgress = async (req, res) => {
   }
 };
 
-// Submit test
+// Run code (for candidate to test code during test). No auth; optional attemptId+token to rate-limit per attempt.
+exports.runCode = async (req, res) => {
+  try {
+    const { language = 'javascript', code, stdin = '' } = req.body;
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'code is required' });
+    }
+    const result = await runCode(language, code, stdin);
+    res.json({
+      success: true,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      error: result.error || undefined,
+    });
+  } catch (error) {
+    console.error('Run code error:', error);
+    res.status(500).json({ error: error.message || 'Failed to run code' });
+  }
+};
+
+// Submit test (then trigger background LLM evaluation)
 exports.submitTest = async (req, res) => {
   try {
     const { attemptId } = req.params;
@@ -260,6 +282,13 @@ exports.submitTest = async (req, res) => {
     attempt.status = 'submitted';
     attempt.submittedAt = new Date();
     await attempt.save();
+
+    const evaluateTestAttempt = require('../controllers/llmController').evaluateTestAttempt;
+    if (typeof evaluateTestAttempt === 'function') {
+      setImmediate(() => {
+        evaluateTestAttempt(attempt._id).catch((e) => console.error('Test evaluation error:', e));
+      });
+    }
 
     res.json({
       success: true,

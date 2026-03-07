@@ -515,6 +515,129 @@ export const getJobsForRanking = async (idToken) => {
   }
 };
 
+// Evaluate all applications for a job after deadline (HR only)
+export const evaluateJobApplications = async (jobId, idToken) => {
+  try {
+    const response = await api.post(`/applications/evaluate-job/${jobId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to evaluate applications',
+    };
+  }
+};
+
+// Get evaluated candidates (all with scores) so HR can send test emails (HR only)
+export const getEvaluatedCandidates = async (jobId, idToken) => {
+  try {
+    const response = await api.get(`/applications/evaluated-candidates/${jobId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch candidates',
+    };
+  }
+};
+
+// Get all applications for a job (HR only) - for instant ranking before/after deadline
+export const getApplicationsByJob = async (jobId, idToken) => {
+  try {
+    const response = await api.get(`/applications/by-job/${jobId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch applications',
+    };
+  }
+};
+
+// Evaluate one application instantly (HR only) - show 1 candidate ranking; rest after deadline
+export const evaluateOneApplication = async (applicationId, idToken) => {
+  try {
+    const response = await api.post(`/applications/evaluate-one/${applicationId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to evaluate',
+    };
+  }
+};
+
+// Mark interview invite sent for selected applications (HR only)
+export const markInterviewInviteSent = async (jobId, applicationIds, idToken) => {
+  try {
+    const response = await api.post(`/applications/mark-interview-sent/${jobId}`, { applicationIds }, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to mark interview sent',
+    };
+  }
+};
+
+// Mark selected hires (HR only)
+export const markSelectedAsHire = async (jobId, applicationIds, idToken) => {
+  try {
+    const response = await api.post(`/applications/mark-hires/${jobId}`, { applicationIds }, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to update hires',
+    };
+  }
+};
+
+// Finalize job as completed (HR only)
+export const finalizeJob = async (jobId, idToken) => {
+  try {
+    const response = await api.post(`/applications/finalize-job/${jobId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to finalize job',
+    };
+  }
+};
+
+// Generate training plan PDF for a hire (HR only)
+export const generateTrainingPlan = async (applicationId, idToken) => {
+  try {
+    const response = await api.post(`/applications/generate-training-plan/${applicationId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to generate training plan',
+    };
+  }
+};
+
+// Get base URL for API (for download links)
+export const getApiBaseUrl = () => config.api.getBaseUrl();
+
 // Get HR dashboard statistics
 export const getDashboardStatistics = async (idToken) => {
   try {
@@ -784,6 +907,20 @@ export const submitTest = async (attemptId, token, payload = {}) => {
     return {
       success: false,
       error: error.response?.data?.error || error.message || 'Failed to submit test',
+    };
+  }
+};
+
+/** Run code during test (language, code, stdin). Public endpoint. */
+export const runCode = async (language, code, stdin = '') => {
+  try {
+    const response = await api.post('/test/run-code', { language, code, stdin });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to run code',
+      data: error.response?.data,
     };
   }
 };

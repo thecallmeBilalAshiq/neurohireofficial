@@ -32,9 +32,15 @@ exports.createHR = async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters long' });
     }
 
-    // Check if HR account already exists in Firebase
+    // Normalize email so we never query with undefined/empty (Mongoose findOne(undefined) can match first doc)
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if HR account already exists in Firebase (case-insensitive)
     try {
-      const existingUser = await admin.auth().getUserByEmail(email);
+      const existingUser = await admin.auth().getUserByEmail(email.trim());
       return res.status(400).json({ error: 'HR account with this email already exists' });
     } catch (error) {
       if (error.code !== 'auth/user-not-found') {
@@ -43,8 +49,9 @@ exports.createHR = async (req, res) => {
       // User doesn't exist - that's fine, we'll create it
     }
 
-    // Check if user exists in MongoDB (shouldn't happen, but check anyway)
-    const existingMongoUser = await User.findOne({ email });
+    // Check if user exists in MongoDB (case-insensitive; only when email is valid to avoid findOne(undefined) bug)
+    const emailMatchRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+    const existingMongoUser = await User.findOne({ email: emailMatchRegex });
     if (existingMongoUser) {
       return res.status(400).json({ error: 'User with this email already exists in the system' });
     }
