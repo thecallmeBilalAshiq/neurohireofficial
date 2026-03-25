@@ -7,6 +7,7 @@ import { toast } from "react-toastify";
 import { adminLogin } from "../../../lib/api";
 import LoadingSpinner from "../../../components/loading-spinner";
 import PasswordField from "../../../components/password-field";
+import BrandLogo from "../../../components/BrandLogo";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -61,10 +62,10 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'} py-12 px-4 sm:px-6 lg:px-8`}>
+    <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gradient-to-b from-gray-900 via-violet-950/40 to-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/50 to-violet-50'} py-12 px-4 sm:px-6 lg:px-8`}>
       <style>{`
         body {
-          background: ${darkMode ? '#111827' : '#f9fafb'};
+          background: ${darkMode ? '#0f0a1a' : 'linear-gradient(135deg, #ffffff 0%, #fdf4ff 50%, #f5f3ff 100%)'};
           min-height: 100vh;
         }
       `}</style>
@@ -98,8 +99,8 @@ export default function AdminLoginPage() {
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl p-8 border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
             {/* Logo */}
             <div className="mb-8 text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl mb-3">
-                <span className="text-white font-black text-xl">NH</span>
+              <div className="flex justify-center mb-4">
+                <BrandLogo className={`h-28 w-auto max-w-[240px] ${darkMode ? 'brightness-110' : ''}`} />
               </div>
               <h1 className={`text-3xl font-bold ${darkMode ? 'text-white' : 'text-gray-900'}`}>Admin Login</h1>
               <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>NeuroHire Administration Panel</p>
@@ -123,7 +124,7 @@ export default function AdminLoginPage() {
                       message: "Please enter a valid email",
                     },
                   })}
-                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all`}
+                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent transition-all`}
                 />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
               </div>
@@ -145,7 +146,7 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-6 bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-600 hover:via-teal-600 hover:to-emerald-600 disabled:from-cyan-400 disabled:via-teal-400 disabled:to-emerald-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+              className="w-full mt-6 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 hover:from-violet-700 hover:via-fuchsia-700 hover:to-pink-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
             >
               {isLoading ? (
                 <>

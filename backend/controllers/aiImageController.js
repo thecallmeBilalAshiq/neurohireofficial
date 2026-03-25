@@ -56,7 +56,8 @@ exports.generateJobPostImage = [
         });
       }
 
-      const { jobData, description, customPrompt } = req.body;
+      const { jobData, description, customPrompt, theme: themeRaw } = req.body;
+      const theme = themeRaw === 'dark' ? 'dark' : 'light';
 
       if (!jobData) {
         return res.status(400).json({ error: 'Job data is required' });
@@ -112,10 +113,10 @@ exports.generateJobPostImage = [
         }
       }
       
-      // Format qualifications as bullet points
-      let qualifications = qualificationsList.length > 0 
-        ? qualificationsList.slice(0, 5).join(', ')
-        : 'Relevant experience, Strong communication skills, Team player';
+      // Format qualifications for prompts (bullet block)
+      const qualificationsBullets = qualificationsList.length > 0
+        ? qualificationsList.slice(0, 5).map((q) => `• ${q}`).join('\n')
+        : '• Relevant experience\n• Strong communication skills\n• Team player';
       
       // Extract contact information - prioritize job post fields, then fallback to defaults
       let recruitmentEmail = jobData.officialEmail || 
@@ -137,16 +138,109 @@ exports.generateJobPostImage = [
                          jobData.domain || 
                          'website domain';
 
-      // Build the professional prompt with dynamic variables
-      let prompt = `Professional job vacancy banner, 1:1 square format. Use a modern, clean,
-      corporate, flat-design style with minimalist geometric elements. 
-      The color theme must be dynamically chosen by the model for high contrast and variety in each generation,
-      avoiding sticking to one dominant color scheme (e.g., contrasting background and accent colors, chosen randomly).
-      Feature a large, curved abstract shape for visual interest. Text layout: 'WE'RE HIRING' (in a high-contrast neutral 
-      color like white or black), 'JOIN OUR TEAM' (in a bold accent color), '${jobTitle}' (in a secondary neutral color).
-      Include left-aligned bullet points for 'Qualifications:: ${qualifications}'.
-      A prominent 'Apply Now' button (in a bold accent color). Footer elements: 'Send Your CV to:' and '${recruitmentEmail}' 
-      (in an accent color), and small icons/text for '${customerSupport}', '${officeAddress}', and '${websiteDomain}'.`;
+      let prompt;
+      if (theme === 'dark') {
+        prompt = `A square 1:1 luxury job recruitment banner poster.
+
+CONTENT TO DISPLAY:
+- Small top label: "TALENT WANTED" (or "HIRING NOW" or "OPEN POSITION" — pick one)
+- Large bold headline: "MAKE YOUR MARK" (or "BUILD WITH US" or "SHAPE THE FUTURE" — pick one)
+- Job title below headline: "${jobTitle}"
+- Section label: "Qualifications:"
+- Bullet list:
+${qualificationsBullets}
+- Big button with text: "Apply Now"
+- Bottom footer text: "Send Your CV to: ${recruitmentEmail}" | "${customerSupport}" | "${officeAddress}" | "${websiteDomain}"
+
+VISUAL STYLE:
+Dark rich background — deep navy, obsidian black, or dark forest green.
+One large glowing soft light bloom in teal, violet, gold, or coral at the top-right corner fading into the background.
+One organic fluid blob shape in the same accent color, softly glowing, placed bottom-left.
+A large thin-stroked circle arc in the center as a decorative frame element.
+Scattered tiny star-like dots across the background for depth.
+
+TYPOGRAPHY STYLE:
+Small label at top in wide-spaced thin letters, muted color.
+Main headline in massive bold white or gradient colored letters, centered.
+Job title in medium clean white letters below headline.
+Qualifications in small clean white text with a glowing vertical bar on the left side.
+"Apply Now" button is wide pill-shaped with glowing gradient fill and bold white text.
+
+FOOTER:
+Thin horizontal divider line above footer.
+Three evenly spaced footer items with small icons — phone, location, globe.
+All footer text small and clean.
+
+MOOD: Premium, modern, dark luxury. Like a high-end tech brand recruitment poster. No decorative text. No labels. No instructions visible. Only the content listed above.`;
+      } else {
+        prompt = `A square social media job recruitment poster. Flat lay graphic design,
+editorial quality, inspired by top tech brand visual identity systems
+like Stripe, Linear, Notion, and Vercel careers pages.
+
+DESIGN SYSTEM — randomly select ONE complete style per generation:
+
+STYLE A — "Clean Tech Light"
+Crisp white background. One bold solid color accent chosen from:
+electric indigo, vivid coral, forest green, or cobalt blue.
+All text in near-black charcoal. Accent used only on headline
+and CTA button. Generous white space everywhere.
+
+STYLE B — "Dark Premium"
+Pure deep black or very dark navy background. Single glowing
+accent color: soft gold, electric violet, or bright teal.
+Subtle radial light bloom in the accent color at one corner,
+very low opacity. All body text in clean white.
+
+STYLE C — "Warm Minimal"
+Warm off-white or cream background. Bold black headline text.
+One warm accent: terracotta, dusty rose, or muted amber.
+Thin geometric border frame around the poster edges.
+
+STYLE D — "Bold Duotone"
+Solid vivid background in one strong color: deep violet,
+rich emerald, or burnt sienna. All text in pure white.
+One large barely-visible watermark circle or arc shape
+in white at very low opacity for depth. Nothing else.
+
+STYLE E — "Gradient Canvas"
+Smooth two-color gradient background — choose one pair:
+purple-to-midnight blue, teal-to-dark green, coral-to-deep
+burgundy, or gold-to-burnt orange. White text throughout.
+No additional decorative shapes needed.
+
+POSTER CONTENT — display exactly this, nothing else:
+
+TOP SMALL LABEL — one of: "OPEN POSITION" / "NOW HIRING" /
+"WE ARE GROWING" / "JOIN THE TEAM" — small, spaced-out
+uppercase letters, muted or semi-transparent.
+
+MAIN HEADLINE — one of: "BUILD SOMETHING GREAT" /
+"YOUR NEXT CHAPTER" / "DO WORK THAT MATTERS" /
+"MAKE YOUR MARK" / "BE THE DIFFERENCE" —
+very large, bold, dominant, filling most of the upper half.
+
+JOB TITLE — "${jobTitle}" displayed clearly below headline in medium weight clean font.
+
+QUALIFICATIONS — short clean left-aligned list from these items only (simple bullet dots):
+${qualificationsBullets}
+
+CTA BUTTON — pill shaped, labeled "Apply Now",
+filled with the accent color, white text, centered.
+
+FOOTER — thin horizontal line separator, then three small items
+left-to-right: "${recruitmentEmail}" (email), "${officeAddress}" (location), "${websiteDomain}" (website) —
+each with a tiny minimal icon, small clean text.
+
+TYPOGRAPHY: Bold geometric sans-serif for headline
+(Inter, Satoshi, or Futura style). Light weight clean
+sans-serif for body. No script fonts. No decorative fonts.
+
+LAYOUT: Generous padding on all sides. Clear visual hierarchy.
+Top label → Big headline → Job title → Qualifications →
+CTA button → Footer. Nothing overlapping.
+No texture overlays. No noise grain. No illustrated elements.
+No literal rendering of these instructions as text on the poster.`;
+      }
 
       // Add custom prompt modifications if provided (for regeneration)
       if (customPrompt && customPrompt.trim()) {

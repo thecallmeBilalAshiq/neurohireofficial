@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { sendPasswordResetEmail } from "firebase/auth"
 import { auth } from "../../../lib/firebase"
 import { toast } from "react-toastify"
+import BrandLogo from "../../../components/BrandLogo"
 
 export default function ForgotPasswordPage() {
   const router = useRouter()
@@ -71,7 +72,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center p-4 overflow-hidden relative">
       <style>{`
         body {
-          background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 25%, #cffafe 50%, #a7f3d0 75%, #d1fae5 100%);
+          background: linear-gradient(135deg, #ffffff 0%, #fdf4ff 30%, #faf5ff 55%, #f5f3ff 80%, #fce7f3 100%);
           min-height: 100vh;
         }
 
@@ -117,9 +118,9 @@ export default function ForgotPasswordPage() {
         }
 
         .card-gradient {
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 249, 255, 0.9) 100%);
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 245, 255, 0.95) 100%);
           backdrop-filter: blur(10px);
-          border: 1px solid rgba(165, 243, 252, 0.5);
+          border: 1px solid rgba(192, 38, 211, 0.2);
         }
 
         .input-focus {
@@ -128,14 +129,14 @@ export default function ForgotPasswordPage() {
 
         .input-focus:focus {
           transform: translateY(-2px);
-          box-shadow: 0 12px 30px -8px rgba(34, 197, 94, 0.15);
-          border-color: rgba(34, 197, 94, 0.5);
-          background: rgba(240, 253, 250, 0.9);
+          box-shadow: 0 12px 30px -8px rgba(124, 58, 237, 0.2);
+          border-color: rgba(192, 38, 211, 0.45);
+          background: rgba(253, 244, 255, 0.95);
         }
 
         .input-field {
-          background: linear-gradient(135deg, rgba(240, 253, 250, 0.8) 0%, rgba(207, 250, 254, 0.6) 100%);
-          border: 1.5px solid rgba(165, 243, 252, 0.6);
+          background: linear-gradient(135deg, rgba(253, 244, 255, 0.85) 0%, rgba(245, 243, 255, 0.75) 100%);
+          border: 1.5px solid rgba(216, 180, 254, 0.55);
           color: #1e293b;
         }
 
@@ -144,9 +145,9 @@ export default function ForgotPasswordPage() {
         }
 
         .btn-primary {
-          background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
+          background: linear-gradient(135deg, #7c3aed 0%, #c026d3 50%, #db2777 100%);
           transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.25);
+          box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.35);
           position: relative;
           overflow: hidden;
         }
@@ -168,8 +169,8 @@ export default function ForgotPasswordPage() {
 
         .btn-primary:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 20px 40px -8px rgba(16, 185, 129, 0.4);
-          background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
+          box-shadow: 0 20px 40px -8px rgba(192, 38, 211, 0.4);
+          background: linear-gradient(135deg, #6d28d9 0%, #a21caf 50%, #be185d 100%);
         }
 
         .btn-primary:active:not(:disabled) {
@@ -191,12 +192,12 @@ export default function ForgotPasswordPage() {
         }
 
         .link-accent {
-          color: #10b981;
+          color: #c026d3;
           transition: all 0.3s ease;
         }
 
         .link-accent:hover {
-          color: #059669;
+          color: #7c3aed;
           text-decoration: underline;
         }
 
@@ -213,32 +214,27 @@ export default function ForgotPasswordPage() {
       `}</style>
 
       {/* Floating background elements */}
-      <div className="absolute top-0 left-0 w-96 h-96 bg-linear-to-br from-cyan-200 to-emerald-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" />
+      <div className="absolute top-0 left-0 w-96 h-96 bg-linear-to-br from-fuchsia-200 to-violet-200 rounded-full mix-blend-multiply filter blur-3xl opacity-25 animate-float" />
 
       <div
-        className="absolute bottom-0 right-0 w-96 h-96 bg-linear-to-bl from-blue-200 to-green-200 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float"
+        className="absolute bottom-0 right-0 w-96 h-96 bg-linear-to-bl from-violet-200 to-pink-200 rounded-full mix-blend-multiply filter blur-3xl opacity-25 animate-float"
         style={{ animationDelay: "2s" }}
       />
 
       <div className="w-full max-w-md animate-slide-in relative z-10">
-        <div className="card-gradient rounded-3xl shadow-2xl p-8 md:p-10 border border-cyan-100">
+        <div className="card-gradient rounded-3xl shadow-2xl p-8 md:p-10 border border-fuchsia-100/80">
           {/* Logo Section */}
-          <div className="flex justify-center mb-8">
-            <div className="logo-container w-20 h-20 bg-linear-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white font-black text-3xl drop-shadow">NH</span>
-            </div>
+          <div className="flex justify-center mb-6 logo-container">
+            <BrandLogo className="h-32 w-auto max-w-[260px]" />
           </div>
 
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-black mb-2 bg-linear-to-r from-teal-600 to-emerald-600 bg-clip-text text-transparent">
-              NeuroHire
-            </h1>
             <p className="text-slate-600 text-sm font-medium">Reset your password</p>
           </div>
 
           {/* Description */}
-          <div className="mb-6 p-4 bg-linear-to-r from-cyan-50 to-emerald-50 rounded-xl border border-cyan-100">
+          <div className="mb-6 p-4 bg-linear-to-r from-violet-50 to-fuchsia-50 rounded-xl border border-fuchsia-100/80">
             <p className="text-slate-700 text-sm leading-relaxed">
               Enter your email address and we&#39;ll send you a link to reset your password.
             </p>
@@ -298,7 +294,7 @@ export default function ForgotPasswordPage() {
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-cyan-100" />
+              <div className="w-full border-t border-fuchsia-100/80" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="px-2 bg-white text-slate-500 font-medium">or</span>

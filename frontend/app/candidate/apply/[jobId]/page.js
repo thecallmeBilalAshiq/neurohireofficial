@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import ProtectedRoute from "../../../../components/ProtectedRoute";
+import BrandLogo from "../../../../components/BrandLogo";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../../lib/firebase";
 import { getJobPostByIdForCandidate, submitApplication, autofillCV, downloadCVTemplate } from "../../../../lib/api";
@@ -258,7 +259,7 @@ function JobApplicationContent() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600"></div>
       </div>
     );
   }
@@ -268,10 +269,10 @@ function JobApplicationContent() {
   }
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/25 to-violet-50/35'}`}>
       <style>{`
         body {
-          background: ${darkMode ? '#111827' : '#f9fafb'};
+          background: ${darkMode ? '#111827' : 'linear-gradient(135deg, #ffffff 0%, #fdf4ff 50%, #f5f3ff 100%)'};
           min-height: 100vh;
         }
       `}</style>
@@ -288,13 +289,16 @@ function JobApplicationContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             </button>
-            <div>
+            <div className="flex items-center gap-4 min-w-0">
+              <BrandLogo className={`hidden sm:block h-12 w-auto max-w-[140px] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
+            <div className="min-w-0">
               <h1 className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                 {job.jobTitle}
               </h1>
               <p className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-0.5`}>
                 {job.company} - {job.location?.city}, {job.location?.country}
               </p>
+            </div>
             </div>
           </div>
         </div>
@@ -307,7 +311,7 @@ function JobApplicationContent() {
             onClick={() => setActiveTab("overview")}
             className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
               activeTab === "overview"
-                ? "border-emerald-500 text-emerald-600"
+                ? "border-fuchsia-500 text-fuchsia-600"
                 : darkMode
                 ? "border-transparent text-gray-400 hover:text-gray-300"
                 : "border-transparent text-gray-500 hover:text-gray-700"
@@ -322,7 +326,7 @@ function JobApplicationContent() {
             }}
             className={`py-4 px-2 border-b-2 font-medium text-sm transition-colors ${
               activeTab === "application"
-                ? "border-emerald-500 text-emerald-600"
+                ? "border-fuchsia-500 text-fuchsia-600"
                 : darkMode
                 ? "border-transparent text-gray-400 hover:text-gray-300"
                 : "border-transparent text-gray-500 hover:text-gray-700"
@@ -334,7 +338,7 @@ function JobApplicationContent() {
       </div>
 
       {/* Content */}
-      <div className={`p-4 sm:p-6 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`p-4 sm:p-6 ${darkMode ? 'bg-gray-900' : 'bg-transparent'}`}>
         <div className="max-w-4xl mx-auto">
           {activeTab === "overview" && (
             <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
@@ -354,7 +358,7 @@ function JobApplicationContent() {
               {/* CV Upload Section */}
               <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
                 <div className="flex items-center gap-2 mb-4">
-                  <svg className="w-6 h-6 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-fuchsia-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   <h2 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
@@ -390,7 +394,7 @@ function JobApplicationContent() {
                   <button
                     onClick={handleAutofill}
                     disabled={!cvFile || parsing}
-                    className="bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="bg-fuchsia-500 hover:bg-fuchsia-600 disabled:bg-gray-400 text-white px-6 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                   >
                     {parsing ? (
                       <>
@@ -457,7 +461,7 @@ function JobApplicationContent() {
                         value={formData.firstName}
                         onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                         placeholder="John"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -471,7 +475,7 @@ function JobApplicationContent() {
                         value={formData.lastName}
                         onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                         placeholder="Doe"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -485,7 +489,7 @@ function JobApplicationContent() {
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         placeholder="john.doe@example.com"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -499,7 +503,7 @@ function JobApplicationContent() {
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         placeholder="+1 234 567 8900"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -513,7 +517,7 @@ function JobApplicationContent() {
                         value={formData.address}
                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         placeholder="123 Main Street, City, State, Country"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
                   </div>
@@ -535,7 +539,7 @@ function JobApplicationContent() {
                         onChange={(e) => setFormData({ ...formData, education: e.target.value })}
                         rows={3}
                         placeholder="e.g., Bachelor of Science in Computer Science from NUST (2020)"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -548,7 +552,7 @@ function JobApplicationContent() {
                         value={formData.cgpa}
                         onChange={(e) => setFormData({ ...formData, cgpa: e.target.value })}
                         placeholder="e.g., 3.8, 4.0"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -561,7 +565,7 @@ function JobApplicationContent() {
                         onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
                         rows={3}
                         placeholder="e.g., 2 years as Software Developer at Tech Corp. Developed web applications using React and Node.js..."
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -574,7 +578,7 @@ function JobApplicationContent() {
                         onChange={(e) => setFormData({ ...formData, projects: e.target.value })}
                         rows={3}
                         placeholder="e.g., E-commerce Website - Built a full-stack e-commerce platform using React, Node.js, and MongoDB..."
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -587,7 +591,7 @@ function JobApplicationContent() {
                         onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
                         rows={2}
                         placeholder="e.g., JavaScript, Python, React, Node.js, MongoDB, Git"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -600,7 +604,7 @@ function JobApplicationContent() {
                         onChange={(e) => setFormData({ ...formData, languages: e.target.value })}
                         rows={2}
                         placeholder="e.g., English (Fluent), Urdu (Native), Spanish (Conversational)"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
 
@@ -613,7 +617,7 @@ function JobApplicationContent() {
                         onChange={(e) => setFormData({ ...formData, certificates: e.target.value })}
                         rows={2}
                         placeholder="e.g., AWS Certified Solutions Architect, Google Cloud Professional Developer"
-                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600 placeholder-gray-500' : 'bg-gray-50 text-gray-900 border-gray-300 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       />
                     </div>
                   </div>
@@ -622,7 +626,7 @@ function JobApplicationContent() {
                 <button
                   type="submit"
                   disabled={uploading || !cvFile}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-400 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
+                  className="w-full bg-fuchsia-500 hover:bg-fuchsia-600 disabled:bg-gray-400 text-white font-semibold px-6 py-3 rounded-lg transition-colors"
                 >
                   {uploading ? "Submitting..." : "Submit Application"}
                 </button>
@@ -660,7 +664,7 @@ function JobApplicationContent() {
                     await handleDownloadCVTemplate();
                     setShowCVTemplateModal(false);
                   }}
-                  className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2 bg-fuchsia-500 hover:bg-fuchsia-600 text-white rounded-lg transition-colors"
                 >
                   Download Template
                 </button>
@@ -675,7 +679,7 @@ function JobApplicationContent() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-xl p-6 max-w-sm mx-4 border ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
             <div className="flex flex-col items-center gap-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-500"></div>
               <p className={`text-lg font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                 Auto parsing is in progress...
               </p>

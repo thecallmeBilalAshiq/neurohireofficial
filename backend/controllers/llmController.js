@@ -7,16 +7,33 @@ let Bytez, sdk, model;
 
 try {
   Bytez = require('bytez.js');
-  const key = process.env.BYTEZ_API_KEY || "8357654868fcca0cb5158f6a591937c3";
-  
+  const key = process.env.BYTEZ_API_KEY;
+  const modelId = process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it';
+
   if (!key) {
     console.error('Warning: BYTEZ_API_KEY not set. LLM functionality will not work.');
   } else {
     sdk = new Bytez(key);
-    model = sdk.model("openai/gpt-4o");
+    model = sdk.model(modelId);
   }
 } catch (error) {
   console.error('LLM functionality will not work until bytez.js is installed.');
+}
+
+const BYTEZ_MODEL_ID_LOWER = (process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it').toLowerCase();
+
+/** Bytez returns errors if the model does not support max_completion_tokens (e.g. Gemma). */
+function bytezMaxCompletionOption(maxTokens) {
+  if (maxTokens == null || maxTokens <= 0) return undefined;
+  if (BYTEZ_MODEL_ID_LOWER.includes('gemma')) return undefined;
+  if (process.env.BYTEZ_DISABLE_MAX_COMPLETION_TOKENS === '1') return undefined;
+  return { max_completion_tokens: maxTokens };
+}
+
+async function runBytez(messages, maxTokens) {
+  if (!model) throw new Error('LLM model not initialized');
+  const opts = bytezMaxCompletionOption(maxTokens);
+  return opts ? model.run(messages, opts) : model.run(messages);
 }
 
 const { cleanJobDescription } = require('../utils/textCleaner');
@@ -184,14 +201,12 @@ Write a complete, polished job description that would attract top talent. CRITIC
 
     let output, error;
     try {
-      const result = await model.run([
+      const result = await runBytez([
         {
           "role": "user",
           "content": prompt
         }
-      ], {
-        max_completion_tokens: 4096 // Limit response tokens to avoid exceeding model limits
-      });
+      ], 4096);
       
       // Handle different response formats from Bytez SDK
       if (result && typeof result === 'object') {
@@ -268,7 +283,7 @@ Write a complete, polished job description that would attract top talent. CRITIC
   }
 };
 
-// Generate interview invitation email using GPT-4o
+// Generate interview invitation email using Bytez LLM
 exports.generateInterviewEmail = async (req, res) => {
   try {
     if (!model) {
@@ -338,14 +353,12 @@ IMPORTANT: Return ONLY valid JSON, no additional text or markdown.`;
 
     let output, error;
     try {
-      const result = await model.run([
+      const result = await runBytez([
         {
           "role": "user",
           "content": prompt
         }
-      ], {
-        max_completion_tokens: 4096 // Limit response tokens to avoid exceeding model limits
-      });
+      ], 4096);
       
       if (result && typeof result === 'object') {
         error = result.error || null;
@@ -620,9 +633,9 @@ Requirements:
 
 Output ONLY valid JSON array, no markdown or extra text. Example format:
 [{"questionText":"What is the time complexity of binary search?","options":["O(n)","O(log n)","O(n^2)","O(1)"],"correctIndex":1}, ...]`;
-  const result = await model.run(
+  const result = await runBytez(
     [{ role: 'user', content: prompt }],
-    { max_completion_tokens: 16384 }
+    16384
   );
   if (result && typeof result === 'object' && result.error) {
     console.error('MCQ pool LLM error:', result.error);
@@ -678,9 +691,9 @@ Rules:
 Example format for each object: {"title":"Two Sum","statement":"Given an array of integers, return indices of two numbers that add up to target.","inputFormat":"First line: n. Second line: array. Third: target","outputFormat":"Two space-separated indices","sampleInput":"4","sampleOutput":"0 1","constraints":"2 <= n <= 10000","difficulty":"easy"}
 
 Reply with only the JSON array starting with [ and ending with ].`;
-  const result = await model.run(
+  const result = await runBytez(
     [{ role: 'user', content: prompt }],
-    { max_completion_tokens: 8192 }
+    8192
   );
   if (result && typeof result === 'object' && result.error) {
     console.error('Coding questions LLM error:', result.error);
@@ -797,9 +810,9 @@ Score each of the 7 solutions from 0 to 10 (0=wrong/empty, 10=excellent). Consid
 Reply with ONLY a JSON object (no markdown): { "scores": [n1, n2, n3, n4, n5, n6, n7], "totalCodingScore": number (sum of scores, max 70), "feedback": "one short paragraph" }`;
 
     try {
-      const result = await model.run(
+      const result = await runBytez(
         [{ role: 'user', content: prompt }],
-        { max_completion_tokens: 1024 }
+        1024
       );
       const output = result?.output ?? result?.content ?? result?.text ?? result;
       const text = extractTextFromOutput(output);
@@ -864,7 +877,7 @@ Output a clear, professional training plan with:
 
 Use plain text with clear headings. Keep each section concise but actionable. No markdown code blocks.`;
   try {
-    const result = await model.run([{ role: 'user', content: prompt }], { max_completion_tokens: 2048 });
+    const result = await runBytez([{ role: 'user', content: prompt }], 2048);
     const output = result?.output ?? result?.content ?? result?.text ?? result;
     return extractTextFromOutput(output) || 'Training plan could not be generated.';
   } catch (e) {

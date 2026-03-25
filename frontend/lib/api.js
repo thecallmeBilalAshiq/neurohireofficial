@@ -292,12 +292,14 @@ export const postToSocialMedia = async (jobPostId, idToken) => {
 // Google Drive API removed - images are now sent directly to n8n
 
 // AI Image Generation API
-export const generateAIImage = async (jobData, description, idToken, customPrompt = null) => {
+export const generateAIImage = async (jobData, description, idToken, customPrompt = null, options = {}) => {
+  const theme = options.theme === 'dark' ? 'dark' : 'light';
   try {
     const response = await api.post('/ai-image/generate', { 
       jobData, 
       description,
-      customPrompt 
+      customPrompt,
+      theme,
     }, {
       headers: {
         Authorization: `Bearer ${idToken}`,
@@ -784,7 +786,7 @@ export const deleteHR = async (uid, adminToken) => {
 // Interview Email API Functions
 // ==========================================
 
-// Generate interview/test invitation email using GPT-4o
+// Generate interview/test invitation email (Bytez LLM)
 export const generateInterviewEmail = async (candidates, jobInfo, emailType, idToken) => {
   try {
     const response = await api.post('/llm/generate-interview-email', {

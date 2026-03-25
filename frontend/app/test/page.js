@@ -131,7 +131,7 @@ function TestEntryContent() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
       <div className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-linear-to-r from-teal-600 to-emerald-600">
+          <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-linear-to-r from-violet-600 to-fuchsia-600">
             Online Test – {info?.jobTitle}
           </h1>
           <p className="text-slate-600 dark:text-slate-400 mt-1">{info?.company}</p>
@@ -181,7 +181,7 @@ function TestEntryContent() {
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                className="rounded border-slate-300 dark:border-slate-600 text-teal-600 focus:ring-teal-500"
+                className="rounded border-slate-300 dark:border-slate-600 text-violet-600 focus:ring-violet-500"
               />
               <span className="text-sm text-slate-700 dark:text-slate-300">
                 I have read and agree to these rules and understand that violations may result in disqualification.
@@ -192,7 +192,7 @@ function TestEntryContent() {
             type="button"
             onClick={handleStartTest}
             disabled={!existingAttemptId && (!agreed || starting)}
-            className="px-6 py-2.5 rounded-lg font-medium bg-linear-to-r from-teal-600 to-emerald-600 text-white shadow hover:from-teal-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="px-6 py-2.5 rounded-lg font-medium bg-linear-to-r from-violet-600 to-fuchsia-600 text-white shadow hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             {starting ? "Starting..." : existingAttemptId ? "Continue test" : "Start test"}
           </button>

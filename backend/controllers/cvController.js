@@ -7,14 +7,15 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
-// Import GPT-4o model from llmController
+// Bytez LLM (default: google/gemma-3-1b-it, override with BYTEZ_MODEL)
 let Bytez, sdk, model;
 try {
   Bytez = require('bytez.js');
-  const key = process.env.BYTEZ_API_KEY || "8357654868fcca0cb5158f6a591937c3";
+  const key = process.env.BYTEZ_API_KEY;
+  const modelId = process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it';
   if (key) {
     sdk = new Bytez(key);
-    model = sdk.model("openai/gpt-4o");
+    model = sdk.model(modelId);
   }
 } catch (error) {
   console.error('LLM functionality will not work until bytez.js is installed.');
@@ -159,7 +160,7 @@ exports.downloadCVTemplate = async (req, res) => {
   }
 };
 
-// Autofill CV using GPT-4o
+// Autofill CV using Bytez (default google/gemma-3-1b-it)
 exports.autofillCV = [
   verifyToken, 
   (req, res, next) => {
@@ -318,7 +319,7 @@ except Exception as e:
       return res.status(400).json({ error: 'CV file appears to be empty or could not be read' });
     }
 
-    // Create prompt for GPT-4o to extract structured data
+    // Create prompt for the LLM to extract structured data
     const prompt = `You are a professional CV parser. Extract the following information from the CV text provided below and return ONLY a valid JSON object with the following structure. If any field is not found, use an empty string "" or empty array [].
 
 Required JSON structure:
@@ -379,7 +380,7 @@ ${cvText.substring(0, 8000)}`;
       ]);
 
       if (error) {
-        console.error('GPT-4o Error:', error);
+        console.error('LLM Error:', error);
         // Clean up uploaded file
         if (fs.existsSync(cvPath)) {
           fs.unlinkSync(cvPath);
@@ -420,7 +421,7 @@ ${cvText.substring(0, 8000)}`;
           extractedData = JSON.parse(outputText);
         }
       } catch (parseError) {
-        console.error('Error parsing GPT-4o output:', parseError);
+        console.error('Error parsing LLM output:', parseError);
         console.error('Output text:', outputText);
         // Clean up uploaded file
         if (fs.existsSync(cvPath)) {

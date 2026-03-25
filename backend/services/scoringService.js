@@ -3,10 +3,11 @@ const Bytez = require('bytez.js');
 let sdk, model;
 
 try {
-  const key = process.env.BYTEZ_API_KEY || "8357654868fcca0cb5158f6a591937c3";
+  const key = process.env.BYTEZ_API_KEY;
+  const modelId = process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it';
   if (key) {
     sdk = new Bytez(key);
-    model = sdk.model("openai/gpt-4o");
+    model = sdk.model(modelId);
   }
 } catch (error) {
   console.error('LLM functionality will not work until bytez.js is installed.');
@@ -43,7 +44,7 @@ function extractOutputText(output) {
 }
 
 /**
- * Helper function to parse score from GPT-4o output
+ * Helper function to parse score from LLM output
  */
 function parseScoreFromOutput(outputText, fieldName, allowDecimals = false) {
   try {
@@ -109,7 +110,7 @@ function parseScoreFromOutput(outputText, fieldName, allowDecimals = false) {
 }
 
 /**
- * Score candidate's experience using GPT-4o
+ * Score candidate's experience using LLM
  */
 async function scoreExperience(experience, jobDescription) {
   if (!model) {
@@ -136,7 +137,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
     ]);
 
     if (error) {
-      console.error('GPT-4o Error for experience scoring:', error);
+      console.error('LLM Error for experience scoring:', error);
       return 0;
     }
 
@@ -152,7 +153,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 }
 
 /**
- * Score candidate's projects using GPT-4o
+ * Score candidate's projects using LLM
  */
 async function scoreProjects(projects, jobDescription) {
   if (!model) {
@@ -179,7 +180,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
     ]);
 
     if (error) {
-      console.error('GPT-4o Error for projects scoring:', error);
+      console.error('LLM Error for projects scoring:', error);
       return 0;
     }
 
@@ -195,7 +196,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 }
 
 /**
- * Score candidate's certificates using GPT-4o
+ * Score candidate's certificates using LLM
  */
 async function scoreCertificates(certificates, jobDescription) {
   if (!model) {
@@ -222,7 +223,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
     ]);
 
     if (error) {
-      console.error('GPT-4o Error for certificates scoring:', error);
+      console.error('LLM Error for certificates scoring:', error);
       return 0;
     }
 
@@ -238,7 +239,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 }
 
 /**
- * Score candidate's skills using GPT-4o
+ * Score candidate's skills using LLM
  */
 async function scoreSkills(candidateSkills, requiredSkills, jobDescription) {
   if (!model) {
@@ -290,7 +291,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
     ]);
 
     if (error) {
-      console.error('GPT-4o Error for skills scoring:', error);
+      console.error('LLM Error for skills scoring:', error);
       return 0;
     }
 
@@ -306,7 +307,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 }
 
 /**
- * Score candidate's languages using GPT-4o
+ * Score candidate's languages using LLM
  */
 async function scoreLanguages(languages, jobDescription) {
   if (!model) {
@@ -352,7 +353,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
     ]);
 
     if (error) {
-      console.error('GPT-4o Error for languages scoring:', error);
+      console.error('LLM Error for languages scoring:', error);
       return 0;
     }
 
@@ -368,7 +369,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 }
 
 /**
- * Score candidate's education using GPT-4o
+ * Score candidate's education using LLM
  */
 async function scoreEducation(education, jobDescription) {
   if (!model) {
@@ -458,7 +459,7 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
     ]);
 
     if (error) {
-      console.error('GPT-4o Error for education scoring:', error);
+      console.error('LLM Error for education scoring:', error);
       return 0;
     }
 
@@ -596,7 +597,7 @@ async function scoreCandidate(application, jobPost) {
 
     // Check if model is available
     if (!model) {
-      console.error('GPT-4o model not available');
+      console.error('LLM model not available');
       throw new Error('LLM service not available');
     }
 

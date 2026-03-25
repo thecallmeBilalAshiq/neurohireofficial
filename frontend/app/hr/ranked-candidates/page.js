@@ -23,10 +23,11 @@ import {
   updateJobPost,
 } from "../../../lib/api";
 import { toast } from "react-toastify";
+import { useHrDarkMode } from "../../../lib/useHrDarkMode";
 
 function RankedCandidatesContent() {
   const router = useRouter();
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useHrDarkMode();
   const [idToken, setIdToken] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState("");
@@ -62,13 +63,6 @@ function RankedCandidatesContent() {
   const [evaluatingOneId, setEvaluatingOneId] = useState(null);
   const [deadlineInput, setDeadlineInput] = useState("");
   const [updatingDeadline, setUpdatingDeadline] = useState(false);
-
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode !== null) {
-      setDarkMode(savedDarkMode === 'true');
-    }
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -540,7 +534,7 @@ function RankedCandidatesContent() {
   };
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/30 to-violet-50/40'}`}>
       <style>{`
         body {
           background: ${darkMode ? '#111827' : '#f9fafb'};
@@ -569,29 +563,52 @@ function RankedCandidatesContent() {
               </p>
             </div>
           </div>
-          
-          {/* Selection Actions */}
-          {selectedCandidates.length > 0 && (
-            <div className="flex items-center gap-3">
-              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                {selectedCandidates.length} selected
-              </span>
+
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <div className={`flex items-center gap-2 ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} rounded-lg p-1`}>
               <button
-                onClick={handleGenerateEmail}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg hover:from-emerald-600 hover:to-teal-700 transition-all shadow-md"
+                type="button"
+                onClick={() => setDarkMode(false)}
+                className={`p-2 rounded transition-colors ${!darkMode ? 'bg-white shadow-sm' : 'hover:bg-gray-600'}`}
+                title="Light mode"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <svg className={`w-4 h-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
-                Send Email
+              </button>
+              <button
+                type="button"
+                onClick={() => setDarkMode(true)}
+                className={`p-2 rounded transition-colors ${darkMode ? 'bg-gray-600 shadow-sm' : ''}`}
+                title="Dark mode"
+              >
+                <svg className={`w-4 h-4 ${darkMode ? 'text-white' : 'text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
               </button>
             </div>
-          )}
+            {selectedCandidates.length > 0 && (
+              <>
+                <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  {selectedCandidates.length} selected
+                </span>
+                <button
+                  onClick={handleGenerateEmail}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white rounded-lg hover:from-fuchsia-600 hover:to-violet-700 transition-all shadow-md"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Send Email
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className={`p-4 sm:p-6 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`p-4 sm:p-6 ${darkMode ? 'bg-gray-900' : 'bg-transparent'}`}>
         {/* Job Selection */}
         <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-6 mb-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'} mb-2`}>
@@ -601,7 +618,7 @@ function RankedCandidatesContent() {
             <select
               value={selectedJobId}
               onChange={(e) => setSelectedJobId(e.target.value)}
-              className={`flex-1 min-w-[200px] px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+              className={`flex-1 min-w-[200px] px-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
               disabled={loading}
             >
               <option value="">-- Select a Job --</option>
@@ -627,7 +644,7 @@ function RankedCandidatesContent() {
                 type="button"
                 onClick={handlePrepareTest}
                 disabled={preparingTest || loading}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
               >
                 {preparingTest ? "Preparing…" : "Prepare online test"}
               </button>
@@ -643,7 +660,7 @@ function RankedCandidatesContent() {
                   type="datetime-local"
                   value={deadlineInput}
                   onChange={(e) => setDeadlineInput(e.target.value)}
-                  className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm`}
+                  className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 text-sm`}
                 />
                 {jobMeta?.deadline && (
                   <p className={`mt-1 text-xs ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
@@ -677,11 +694,11 @@ function RankedCandidatesContent() {
         {selectedJobId && (
           <>
             {jobInfo && (
-              <div className={`${darkMode ? 'bg-emerald-900/30 border-emerald-700' : 'bg-emerald-50 border-emerald-200'} rounded-xl shadow-sm p-6 mb-6 border-2 text-center`}>
-                <h2 className={`text-xl font-bold ${darkMode ? 'text-emerald-100' : 'text-emerald-900'} mb-2`}>
+              <div className={`${darkMode ? 'bg-fuchsia-900/30 border-fuchsia-700' : 'bg-fuchsia-50 border-fuchsia-200'} rounded-xl shadow-sm p-6 mb-6 border-2 text-center`}>
+                <h2 className={`text-xl font-bold ${darkMode ? 'text-fuchsia-100' : 'text-fuchsia-900'} mb-2`}>
                   {jobInfo.jobTitle}
                 </h2>
-                <p className={`text-base ${darkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                <p className={`text-base ${darkMode ? 'text-fuchsia-300' : 'text-fuchsia-700'}`}>
                   {jobInfo.company}
                 </p>
               </div>
@@ -689,7 +706,7 @@ function RankedCandidatesContent() {
 
             {loading ? (
               <div className="flex justify-center items-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600"></div>
               </div>
             ) : candidates.length === 0 ? (
               <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-8 text-center border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
@@ -712,14 +729,14 @@ function RankedCandidatesContent() {
                       type="checkbox"
                       checked={selectAll}
                       onChange={handleSelectAll}
-                      className="w-5 h-5 rounded border-2 border-emerald-500 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      className="w-5 h-5 rounded border-2 border-fuchsia-500 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
                     />
                     <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       Select All Candidates ({candidates.length})
                     </span>
                   </label>
                   {selectedCandidates.length > 0 && (
-                    <span className={`text-sm ${darkMode ? 'text-emerald-400' : 'text-emerald-600'} font-medium`}>
+                    <span className={`text-sm ${darkMode ? 'text-fuchsia-400' : 'text-fuchsia-600'} font-medium`}>
                       {selectedCandidates.length} candidate{selectedCandidates.length > 1 ? 's' : ''} selected
                     </span>
                   )}
@@ -738,11 +755,11 @@ function RankedCandidatesContent() {
                         onClick={() => handleSelectCandidate(candidate)}
                         className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg border-2 transition-all duration-200 cursor-pointer hover:shadow-xl ${
                           isSelected 
-                            ? 'border-emerald-500 ring-2 ring-emerald-500/30' 
+                            ? 'border-fuchsia-500 ring-2 ring-fuchsia-500/30' 
                             : isTopThree 
-                              ? darkMode ? 'border-emerald-700/50' : 'border-emerald-200'
+                              ? darkMode ? 'border-fuchsia-700/50' : 'border-fuchsia-200'
                               : darkMode ? 'border-gray-700' : 'border-gray-100'
-                        } ${isTopThree ? (darkMode ? 'bg-emerald-900/10' : 'bg-emerald-50/30') : ''}`}
+                        } ${isTopThree ? (darkMode ? 'bg-fuchsia-900/10' : 'bg-fuchsia-50/30') : ''}`}
                       >
                         {/* Card Header */}
                         <div className={`p-4 border-b ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
@@ -756,7 +773,7 @@ function RankedCandidatesContent() {
                                   e.stopPropagation();
                                   handleSelectCandidate(candidate);
                                 }}
-                                className="w-5 h-5 rounded border-2 border-emerald-500 text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                                className="w-5 h-5 rounded border-2 border-fuchsia-500 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer flex-shrink-0"
                               />
                               
                               {/* Rank Badge */}
@@ -766,7 +783,7 @@ function RankedCandidatesContent() {
                                 {rank === 3 && <span className="text-xl mr-1">🥉</span>}
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
                                   isTopThree 
-                                    ? 'bg-emerald-500 text-white' 
+                                    ? 'bg-fuchsia-500 text-white' 
                                     : darkMode 
                                       ? 'bg-gray-700 text-gray-300' 
                                       : 'bg-gray-200 text-gray-700'
@@ -779,7 +796,7 @@ function RankedCandidatesContent() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center font-semibold text-sm ${
-                                    darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-700'
+                                    darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gradient-to-br from-fuchsia-100 to-fuchsia-200 text-fuchsia-700'
                                   }`}>
                                     {(candidate.candidateName || 'N/A').charAt(0).toUpperCase()}
                                   </div>
@@ -820,9 +837,9 @@ function RankedCandidatesContent() {
                                       candidate.testStatus === "pending"
                                         ? "bg-amber-500/80 text-white border-amber-600"
                                         : (candidate.testScore || 0) >= 70
-                                          ? "bg-teal-500 text-white border-teal-600"
+                                          ? "bg-violet-500 text-white border-violet-600"
                                           : (candidate.testScore || 0) >= 50
-                                            ? "bg-teal-400/80 text-white border-teal-500"
+                                            ? "bg-violet-400/80 text-white border-violet-500"
                                             : "bg-slate-500 text-white border-slate-600"
                                     }`} title="Online test score">
                                       Test: {candidate.testStatus === "pending" ? "Pending" : candidate.testScore}
@@ -900,7 +917,7 @@ function RankedCandidatesContent() {
                           {viewMode === "ranked" && (candidate.selectedAsHire || candidate.interviewInviteSentAt) && (
                             <div className={`mt-3 pt-3 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                               {candidate.selectedAsHire && (
-                                <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${darkMode ? 'bg-emerald-800 text-emerald-200' : 'bg-emerald-100 text-emerald-800'}`}>
+                                <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${darkMode ? 'bg-fuchsia-800 text-fuchsia-200' : 'bg-fuchsia-100 text-fuchsia-800'}`}>
                                   Selected as hire
                                 </span>
                               )}
@@ -918,7 +935,7 @@ function RankedCandidatesContent() {
                                     <button
                                       type="button"
                                       onClick={(e) => { e.stopPropagation(); handleDownloadTrainingPlan(candidate._id, candidate.candidateName); }}
-                                      className="text-xs px-2 py-1 rounded bg-teal-600 text-white hover:bg-teal-700"
+                                      className="text-xs px-2 py-1 rounded bg-violet-600 text-white hover:bg-violet-700"
                                     >
                                       Download PDF
                                     </button>
@@ -995,7 +1012,7 @@ function RankedCandidatesContent() {
                                 onClick={() => handlePageChange(page)}
                                 className={`min-w-[36px] px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                                   currentPage === page
-                                    ? `${darkMode ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-white'}`
+                                    ? `${darkMode ? 'bg-fuchsia-600 text-white' : 'bg-fuchsia-500 text-white'}`
                                     : `${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300'}`
                                 }`}
                               >
@@ -1045,8 +1062,8 @@ function RankedCandidatesContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
           <div className={`w-full max-w-md ${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-2xl shadow-2xl p-6`}>
             <div className="text-center mb-6">
-              <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${darkMode ? 'bg-emerald-900/30' : 'bg-emerald-100'}`}>
-                <svg className={`w-8 h-8 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className={`w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center ${darkMode ? 'bg-fuchsia-900/30' : 'bg-fuchsia-100'}`}>
+                <svg className={`w-8 h-8 ${darkMode ? 'text-fuchsia-400' : 'text-fuchsia-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
@@ -1054,7 +1071,7 @@ function RankedCandidatesContent() {
                 Confirm Selection
               </h3>
               <p className={`${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                You have selected <span className="font-semibold text-emerald-500">{selectedCandidates.length}</span> candidate{selectedCandidates.length > 1 ? 's' : ''}.
+                You have selected <span className="font-semibold text-fuchsia-500">{selectedCandidates.length}</span> candidate{selectedCandidates.length > 1 ? 's' : ''}.
               </p>
             </div>
 
@@ -1062,7 +1079,7 @@ function RankedCandidatesContent() {
             <div className={`max-h-48 overflow-y-auto mb-6 ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'} rounded-lg p-3`}>
               {selectedCandidates.map((candidate, idx) => (
                 <div key={idx} className={`flex items-center gap-2 py-2 ${idx > 0 ? `border-t ${darkMode ? 'border-gray-600' : 'border-gray-200'}` : ''}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-gray-600 text-gray-300' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-gray-600 text-gray-300' : 'bg-fuchsia-100 text-fuchsia-700'}`}>
                     {(candidate.candidateName || 'N').charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1087,7 +1104,7 @@ function RankedCandidatesContent() {
                   onClick={() => setEmailType('interview')}
                   className={`p-3 rounded-lg border-2 transition-all ${
                     emailType === 'interview'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      ? 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-700'
                       : darkMode
                         ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
@@ -1102,7 +1119,7 @@ function RankedCandidatesContent() {
                   onClick={() => setEmailType('online_test')}
                   className={`p-3 rounded-lg border-2 transition-all ${
                     emailType === 'online_test'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      ? 'border-fuchsia-500 bg-fuchsia-50 text-fuchsia-700'
                       : darkMode
                         ? 'border-gray-600 bg-gray-700 text-gray-300 hover:border-gray-500'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
@@ -1129,7 +1146,7 @@ function RankedCandidatesContent() {
               </button>
               <button
                 onClick={confirmAndGenerateEmail}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 transition-all"
+                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white rounded-lg font-medium hover:from-fuchsia-600 hover:to-violet-700 transition-all"
               >
                 Generate Email
               </button>
@@ -1169,8 +1186,8 @@ function RankedCandidatesContent() {
             <div className="p-6">
               {isGeneratingEmail ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mb-4"></div>
-                  <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Generating email with GPT-4o...</p>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600 mb-4"></div>
+                  <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>Generating email…</p>
                 </div>
               ) : (
                 <>
@@ -1188,7 +1205,7 @@ function RankedCandidatesContent() {
                           type="text"
                           value={hrInfo.name}
                           onChange={(e) => setHrInfo(prev => ({ ...prev, name: e.target.value }))}
-                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                           placeholder="HR Manager"
                         />
                       </div>
@@ -1200,7 +1217,7 @@ function RankedCandidatesContent() {
                           type="text"
                           value={hrInfo.title}
                           onChange={(e) => setHrInfo(prev => ({ ...prev, title: e.target.value }))}
-                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                           placeholder="Human Resources"
                         />
                       </div>
@@ -1212,7 +1229,7 @@ function RankedCandidatesContent() {
                           type="email"
                           value={hrInfo.email}
                           onChange={(e) => setHrInfo(prev => ({ ...prev, email: e.target.value }))}
-                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                           placeholder="hr@company.com"
                         />
                       </div>
@@ -1224,7 +1241,7 @@ function RankedCandidatesContent() {
                           type="text"
                           value={hrInfo.phone}
                           onChange={(e) => setHrInfo(prev => ({ ...prev, phone: e.target.value }))}
-                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                          className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                           placeholder="+1 234 567 890"
                         />
                       </div>
@@ -1240,7 +1257,7 @@ function RankedCandidatesContent() {
                       type="text"
                       value={generatedEmail.subject}
                       onChange={(e) => setGeneratedEmail(prev => ({ ...prev, subject: e.target.value }))}
-                      className={`w-full px-4 py-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      className={`w-full px-4 py-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       placeholder="Email subject..."
                     />
                   </div>
@@ -1254,7 +1271,7 @@ function RankedCandidatesContent() {
                       value={generatedEmail.body}
                       onChange={(e) => setGeneratedEmail(prev => ({ ...prev, body: e.target.value }))}
                       rows={15}
-                      className={`w-full px-4 py-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-sm`}
+                      className={`w-full px-4 py-3 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 font-mono text-sm`}
                       placeholder="Email body..."
                     />
                   </div>
@@ -1278,7 +1295,7 @@ function RankedCandidatesContent() {
                       ].map((placeholder, idx) => (
                         <span
                           key={idx}
-                          className={`px-2 py-1 text-xs rounded ${darkMode ? 'bg-gray-600 text-emerald-400' : 'bg-emerald-100 text-emerald-700'} font-mono`}
+                          className={`px-2 py-1 text-xs rounded ${darkMode ? 'bg-gray-600 text-fuchsia-400' : 'bg-fuchsia-100 text-fuchsia-700'} font-mono`}
                         >
                           {placeholder}
                         </span>
@@ -1290,15 +1307,15 @@ function RankedCandidatesContent() {
                   </div>
 
                   {/* Recipients Preview */}
-                  <div className={`mb-6 p-4 rounded-lg ${darkMode ? 'bg-emerald-900/20 border-emerald-700' : 'bg-emerald-50 border-emerald-200'} border`}>
-                    <h5 className={`text-sm font-semibold ${darkMode ? 'text-emerald-300' : 'text-emerald-700'} mb-2`}>
+                  <div className={`mb-6 p-4 rounded-lg ${darkMode ? 'bg-fuchsia-900/20 border-fuchsia-700' : 'bg-fuchsia-50 border-fuchsia-200'} border`}>
+                    <h5 className={`text-sm font-semibold ${darkMode ? 'text-fuchsia-300' : 'text-fuchsia-700'} mb-2`}>
                       Recipients ({selectedCandidates.length})
                     </h5>
                     <div className="flex flex-wrap gap-2">
                       {selectedCandidates.slice(0, 5).map((candidate, idx) => (
                         <span
                           key={idx}
-                          className={`px-2 py-1 text-xs rounded-full ${darkMode ? 'bg-emerald-800 text-emerald-200' : 'bg-emerald-100 text-emerald-800'}`}
+                          className={`px-2 py-1 text-xs rounded-full ${darkMode ? 'bg-fuchsia-800 text-fuchsia-200' : 'bg-fuchsia-100 text-fuchsia-800'}`}
                         >
                           {candidate.candidateName || candidate.email}
                         </span>
@@ -1343,7 +1360,7 @@ function RankedCandidatesContent() {
                 <button
                   onClick={handleSendEmails}
                   disabled={isSendingEmails || !generatedEmail.subject || !generatedEmail.body}
-                  className={`px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg font-medium hover:from-emerald-600 hover:to-teal-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
+                  className={`px-5 py-2.5 bg-gradient-to-r from-fuchsia-500 to-violet-600 text-white rounded-lg font-medium hover:from-fuchsia-600 hover:to-violet-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}
                 >
                   {isSendingEmails ? (
                     <>
