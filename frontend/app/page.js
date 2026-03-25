@@ -140,7 +140,7 @@ export default function LandingPage() {
                         value_area: 800
                       }
                     },
-                    color: { value: "#6c63ff" },
+                    color: { value: "#c026d3" },
                     shape: {
                       type: "circle",
                       stroke: {
@@ -174,7 +174,7 @@ export default function LandingPage() {
                     line_linked: {
                       enable: true,
                       distance: 150,
-                      color: "#6c63ff",
+                      color: "#7c3aed",
                       opacity: 0.4,
                       width: 1
                     },
@@ -277,8 +277,8 @@ export default function LandingPage() {
       <header className="header" id="header">
         <div className="container">
           <nav className="navbar">
-            <Link href="/" className="navbar-brand">
-              Neuro<span className="text-gradient">Hire</span>
+            <Link href="/" className="navbar-brand navbar-brand-with-logo" aria-label="NeuroHire Official home">
+              <img src="/neurohire-logo.png" alt="NeuroHire Official" />
             </Link>
 
             <ul className="nav-menu">
@@ -1168,7 +1168,7 @@ export default function LandingPage() {
           <div className="footer-content">
             <div>
               <div className="footer-brand">
-                Neuro<span className="text-gradient">Hire</span>
+                <img src="/neurohire-logo.png" alt="NeuroHire Official" />
               </div>
               <p className="footer-description">
                 AI-Powered Recruitment Solutions | Transform Your Hiring Process | Smarter, Faster,

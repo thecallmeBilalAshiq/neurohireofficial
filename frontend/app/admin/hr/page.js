@@ -15,6 +15,7 @@ import {
 import LoadingSpinner from "../../../components/loading-spinner";
 import PasswordField from "../../../components/password-field";
 import PasswordStrengthHint from "../../../components/password-strength-hint";
+import BrandLogo from "../../../components/BrandLogo";
 
 export default function AdminHRManagementPage() {
   const router = useRouter();
@@ -254,14 +255,14 @@ export default function AdminHRManagementPage() {
 
   if (loading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/40 to-violet-50'}`}>
         <LoadingSpinner />
       </div>
     );
   }
 
   return (
-    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/30 to-violet-50/40'}`}>
       <style>{`
         body {
           background: ${darkMode ? '#111827' : '#f9fafb'};
@@ -287,16 +288,13 @@ export default function AdminHRManagementPage() {
         <div className={`${sidebarCollapsed ? 'p-3' : 'p-6'} border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} relative`}>
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-3`}>
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-black text-lg">NH</span>
-                </div>
-                <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>NeuroHire</span>
+              <div className="flex items-center gap-2 flex-1 min-w-0 py-1">
+                <BrandLogo className={`h-16 w-auto max-h-[4.25rem] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
               </div>
             )}
             {sidebarCollapsed && (
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-black text-lg">NH</span>
+              <div className="flex justify-center w-full py-1">
+                <BrandLogo className={`h-12 w-auto max-h-14 shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
               </div>
             )}
             {/* Sidebar Toggle Button */}
@@ -424,8 +422,8 @@ export default function AdminHRManagementPage() {
         {/* Bottom Avatar */}
         <div className={`p-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
           <div className={`${sidebarCollapsed ? 'justify-center' : ''} flex items-center gap-3`}>
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">N</span>
+            <div className="w-10 h-10 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <span className="text-white font-bold text-sm">A</span>
             </div>
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
@@ -553,8 +551,8 @@ export default function AdminHRManagementPage() {
             {/* Total HR */}
             <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-4 sm:p-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-fuchsia-100 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-fuchsia-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
@@ -778,7 +776,7 @@ export default function AdminHRManagementPage() {
               <h3 className={`text-base sm:text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>HR Accounts</h3>
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
+                className="px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg transition-colors font-medium text-sm flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -825,7 +823,7 @@ export default function AdminHRManagementPage() {
                       <tr key={hr.uid} className={`${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'} transition-colors`}>
                         <td className={`px-6 py-4 whitespace-nowrap`}>
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-full flex items-center justify-center">
+                            <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-full flex items-center justify-center">
                               <span className="text-white text-xs font-bold">{hr.name?.charAt(0)?.toUpperCase() || 'H'}</span>
                             </div>
                             <div className={`text-sm font-medium ${darkMode ? 'text-white' : 'text-gray-900'}`}>{hr.name}</div>
@@ -913,7 +911,7 @@ export default function AdminHRManagementPage() {
                 <input
                   type="text"
                   {...register("name", { required: "Name is required" })}
-                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent`}
                   placeholder="Enter HR name"
                 />
                 {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
@@ -930,7 +928,7 @@ export default function AdminHRManagementPage() {
                       message: "Invalid email format",
                     },
                   })}
-                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent`}
                   placeholder="Enter email address"
                 />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
@@ -971,7 +969,7 @@ export default function AdminHRManagementPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="flex-1 px-4 py-2.5 bg-fuchsia-600 text-white rounded-lg hover:bg-fuchsia-700 disabled:bg-fuchsia-400 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   {isSubmitting ? "Creating..." : "Create Account"}
                 </button>
@@ -1002,7 +1000,7 @@ export default function AdminHRManagementPage() {
                 <input
                   type="text"
                   {...register("name", { required: "Name is required" })}
-                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent`}
                   placeholder="Enter HR name"
                 />
                 {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
@@ -1019,7 +1017,7 @@ export default function AdminHRManagementPage() {
                       message: "Invalid email format",
                     },
                   })}
-                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
+                  className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' : 'border-gray-300 text-gray-900 placeholder-gray-400'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent`}
                   placeholder="Enter email address"
                 />
                 {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
@@ -1036,7 +1034,7 @@ export default function AdminHRManagementPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="flex-1 px-4 py-2.5 bg-fuchsia-600 text-white rounded-lg hover:bg-fuchsia-700 disabled:bg-fuchsia-400 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   {isSubmitting ? "Updating..." : "Update Account"}
                 </button>

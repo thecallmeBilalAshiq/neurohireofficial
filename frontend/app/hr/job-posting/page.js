@@ -1,37 +1,27 @@
 "use client";
 
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "../../../components/ProtectedRoute";
+import BrandLogo from "../../../components/BrandLogo";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { toast } from "react-toastify";
 import { getJobPosts, createJobPost, updateJobPost, deleteJobPost, getJobPostById, generateJobDescription, postToSocialMedia, generateAIImage, checkAIImageResult, getCompanyInfo, updateCompanyInfo } from "../../../lib/api";
 import config from "../../../lib/config";
+import { useHrDarkMode } from "../../../lib/useHrDarkMode";
 
 function JobPostingContent() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useHrDarkMode();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showMenuItems, setShowMenuItems] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const [errors, setErrors] = useState([]);
-
-  // Load dark mode preference from localStorage on mount
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode !== null) {
-      setDarkMode(savedDarkMode === 'true');
-    }
-  }, []);
-
-  // Save dark mode preference to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('darkMode', darkMode.toString());
-  }, [darkMode]);
 
   // Load errors from localStorage on mount
   useEffect(() => {
@@ -90,6 +80,12 @@ function JobPostingContent() {
   const [regenerateDescription, setRegenerateDescription] = useState("");
   const [aiImageTaskId, setAiImageTaskId] = useState(null);
   const [isPollingForImage, setIsPollingForImage] = useState(false);
+  /** Persists for regenerate: 'light' | 'dark' */
+  const [aiImageTheme, setAiImageTheme] = useState("light");
+  /** Set when job saved OK but postToSocialMedia failed — Retry only re-calls social webhook */
+  const [socialPostRetryJobId, setSocialPostRetryJobId] = useState(null);
+  const [isRetryingSocialPost, setIsRetryingSocialPost] = useState(false);
+  const [isSavingJobPost, setIsSavingJobPost] = useState(false);
   // Autocomplete suggestions
   const jobTitleSuggestions = [
     "Software Engineer", "Senior Software Engineer", "Full Stack Developer",
@@ -738,6 +734,7 @@ function JobPostingContent() {
           : (description?.content || description?.text || JSON.stringify(description));
         
         setGeneratedDescription(descriptionText);
+        setSocialPostRetryJobId(null);
         setShowGeneratedModal(true);
         setShowEditFeedback(false);
         setEditFeedback("");
@@ -751,9 +748,59 @@ function JobPostingContent() {
     }
   };
 
+  const finalizeJobPostingFlow = () => {
+    setSocialPostRetryJobId(null);
+    setShowGeneratedModal(false);
+    setShowForm(false);
+    setEditingJobPost(null);
+    setPendingJobData(null);
+    setGeneratedDescription("");
+    setShowTemplateSelection(false);
+    setSelectedTemplate(null);
+    setUploadedImageUrl(null);
+    setAiGeneratedImageUrl(null);
+    setShowAIImagePreview(false);
+    setAiImageBase64(null);
+    setShowRegeneratePrompt(false);
+    setRegenerateDescription("");
+    setAiImageTheme("light");
+    handleClear();
+    if (idToken) fetchJobPosts(idToken);
+  };
+
+  const handleRetrySocialPost = async () => {
+    if (!socialPostRetryJobId || !idToken) return;
+    setIsRetryingSocialPost(true);
+    try {
+      toast.info("Retrying social media post…", { autoClose: 2000 });
+      const socialMediaResult = await postToSocialMedia(socialPostRetryJobId, idToken);
+      if (socialMediaResult.success) {
+        toast.success("Posted to social media successfully!", { autoClose: 5000 });
+        finalizeJobPostingFlow();
+      } else {
+        toast.error(socialMediaResult.error || "Social media posting failed again.");
+        console.error("Social media retry error:", socialMediaResult.error);
+      }
+    } catch (err) {
+      toast.error("Could not retry social post. Check your connection and try again.");
+      console.error(err);
+    } finally {
+      setIsRetryingSocialPost(false);
+    }
+  };
+
+  const handleDismissSocialPostFailure = () => {
+    toast.info("Job post is saved locally. You can close this dialog.", { autoClose: 3500 });
+    finalizeJobPostingFlow();
+  };
+
   const handleLooksGood = async () => {
     if (!pendingJobData || !idToken) {
       toast.error("Missing data");
+      return;
+    }
+
+    if (socialPostRetryJobId) {
       return;
     }
 
@@ -763,6 +810,7 @@ function JobPostingContent() {
     }
 
     try {
+      setIsSavingJobPost(true);
       let finalImageUrl = selectedTemplate || '/job-posting-template.png';
       
       // Convert local template paths to full URLs using centralized config
@@ -793,32 +841,21 @@ function JobPostingContent() {
         
         if (socialMediaResult.success) {
           toast.success(editingJobPost ? "Job post updated and posted to social media!" : "Job post created and posted to social media!", { autoClose: 5000 });
+          finalizeJobPostingFlow();
         } else {
-          toast.warning(editingJobPost ? "Job post updated, but social media posting failed." : "Job post created, but social media posting failed.", { autoClose: 5000 });
+          toast.warning(editingJobPost ? "Job post updated, but social media posting failed." : "Job post saved, but social media posting failed. Use Retry below.", { autoClose: 6000 });
           console.error('Social media posting error:', socialMediaResult.error);
+          setSocialPostRetryJobId(jobPostId);
+          if (idToken) fetchJobPosts(idToken);
         }
-        
-        setShowGeneratedModal(false);
-        setShowForm(false);
-        setEditingJobPost(null);
-        setPendingJobData(null);
-        setGeneratedDescription("");
-        setShowTemplateSelection(false);
-        setSelectedTemplate(null);
-        setUploadedImageUrl(null);
-        setAiGeneratedImageUrl(null);
-        setShowAIImagePreview(false);
-        setAiImageBase64(null);
-        setShowRegeneratePrompt(false);
-        setRegenerateDescription("");
-        handleClear();
-        fetchJobPosts(idToken);
       } else {
         toast.error(result.error || 'Failed to save job post');
       }
     } catch (error) {
       toast.error('Failed to save job post');
       console.error('Error saving job post:', error);
+    } finally {
+      setIsSavingJobPost(false);
     }
   };
 
@@ -901,6 +938,99 @@ function JobPostingContent() {
     setCurrentLanguageInput("");
   };
 
+  const startAiImageGeneration = async (theme, customPrompt = null) => {
+    if (!pendingJobData || !idToken) {
+      toast.error("Missing data");
+      return;
+    }
+    setAiImageTheme(theme);
+    setIsGeneratingAIImage(true);
+    try {
+      const result = await generateAIImage(
+        pendingJobData,
+        generatedDescription,
+        idToken,
+        customPrompt,
+        { theme }
+      );
+      if (result.success) {
+        if (result.data.taskId) {
+          const taskId = result.data.taskId;
+          setAiImageTaskId(taskId);
+          setIsPollingForImage(true);
+          setIsGeneratingAIImage(false);
+          toast.info("Image generation started. Waiting for result...", { autoClose: 3000 });
+
+          let pollAttempts = 0;
+          const maxPollAttempts = 40;
+          const pollInterval = setInterval(async () => {
+            pollAttempts++;
+            try {
+              const checkResult = await checkAIImageResult(taskId, idToken);
+              if (checkResult.success && checkResult.data) {
+                if (checkResult.data.status === "completed") {
+                  clearInterval(pollInterval);
+                  setIsPollingForImage(false);
+                  const imageData =
+                    checkResult.data.imageBase64 ||
+                    checkResult.data.imageData ||
+                    checkResult.data.imageUrl;
+                  if (imageData) {
+                    if (imageData.startsWith("data:image") || imageData.startsWith("http")) {
+                      setAiImageBase64(imageData);
+                      setShowAIImagePreview(true);
+                      setSelectedTemplate(imageData);
+                      setAiGeneratedImageUrl(imageData);
+                      toast.success("AI image generated! Review and confirm to use.");
+                    } else {
+                      toast.error("Invalid image data format");
+                    }
+                  } else {
+                    toast.error("Image data not found in result");
+                  }
+                } else if (
+                  checkResult.data.status === "failed" ||
+                  checkResult.data.status === "error"
+                ) {
+                  clearInterval(pollInterval);
+                  setIsPollingForImage(false);
+                  toast.error("Image generation failed");
+                }
+              }
+            } catch (error) {
+              console.error("Polling error:", error);
+            }
+            if (pollAttempts >= maxPollAttempts) {
+              clearInterval(pollInterval);
+              setIsPollingForImage(false);
+              toast.error("Image generation timed out. Please try again.");
+            }
+          }, 3000);
+        } else if (result.data.imageBase64) {
+          setAiImageBase64(result.data.imageBase64);
+          setShowAIImagePreview(true);
+          setIsGeneratingAIImage(false);
+          toast.success("AI image generated! Review and confirm to upload.");
+        } else if (result.data.imageUrl) {
+          setAiGeneratedImageUrl(result.data.imageUrl);
+          setSelectedTemplate(result.data.imageUrl);
+          setIsGeneratingAIImage(false);
+          toast.success("AI image generated successfully!");
+        } else {
+          toast.error("Unexpected response format");
+          setIsGeneratingAIImage(false);
+        }
+      } else {
+        toast.error(result.error || "Failed to generate AI image");
+        setIsGeneratingAIImage(false);
+      }
+    } catch (error) {
+      console.error("AI image generation error:", error);
+      toast.error("Failed to generate AI image");
+      setIsGeneratingAIImage(false);
+    }
+  };
+
   const handleCancel = () => {
     setShowForm(false);
     setEditingJobPost(null);
@@ -921,7 +1051,7 @@ function JobPostingContent() {
   };
 
   return (
-    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/30 to-violet-50/40'}`}>
       {/* Mobile Sidebar Overlay */}
       {showSidebar && (
         <div
@@ -940,16 +1070,13 @@ function JobPostingContent() {
         <div className={`${sidebarCollapsed ? 'p-3' : 'p-6'} border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} relative`}>
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-3`}>
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-10 h-10 bg-linear-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl flex items-center justify-center shrink-0">
-                  <span className="text-white font-black text-lg">NH</span>
-                </div>
-                <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>NeuroHire</span>
+              <div className="flex items-center gap-2 flex-1 min-w-0 py-1">
+                <BrandLogo className={`h-24 w-auto max-h-[6.5rem] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
               </div>
             )}
             {sidebarCollapsed && (
-              <div className="w-10 h-10 bg-linear-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl flex items-center justify-center shrink-0">
-                <span className="text-white font-black text-lg">NH</span>
+              <div className="flex justify-center w-full py-1">
+                <BrandLogo className={`h-16 w-auto max-h-[5rem] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
               </div>
             )}
             {/* Sidebar Toggle Button - Always visible */}
@@ -1231,7 +1358,7 @@ function JobPostingContent() {
                 <h2 className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Active Job Posts</h2>
                 <button
                   onClick={handleCreateNew}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                  className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1242,7 +1369,7 @@ function JobPostingContent() {
 
               {loading ? (
                 <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-fuchsia-600"></div>
                   <p className={`mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Loading job posts...</p>
                 </div>
               ) : !Array.isArray(jobPosts) || jobPosts.length === 0 ? (
@@ -1358,7 +1485,7 @@ function JobPostingContent() {
                   value={formData.company}
                   onChange={handleInputChange}
                   required
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                   placeholder="Enter company name"
                 />
               </div>
@@ -1373,7 +1500,7 @@ function JobPostingContent() {
                   name="officialEmail"
                   value={formData.officialEmail}
                   onChange={handleInputChange}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                   placeholder="recruitment@company.com"
                 />
                 <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1391,7 +1518,7 @@ function JobPostingContent() {
                   name="websiteUrl"
                   value={formData.websiteUrl}
                   onChange={handleInputChange}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                   placeholder="www.company.com or https://www.company.com"
                 />
                 <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1409,7 +1536,7 @@ function JobPostingContent() {
                   name="contactNo"
                   value={formData.contactNo}
                   onChange={handleInputChange}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                   placeholder="+1 234 567 8900"
                 />
                 <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
@@ -1437,7 +1564,7 @@ function JobPostingContent() {
                         onFocus={() => setCountrySuggestionsOpen(true)}
                         onBlur={() => setTimeout(() => setCountrySuggestionsOpen(false), 200)}
                         required
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="Country *"
                       />
                       {countrySuggestionsOpen && formData.location.country && (
@@ -1476,7 +1603,7 @@ function JobPostingContent() {
                         onFocus={() => setCitySuggestionsOpen(true)}
                         onBlur={() => setTimeout(() => setCitySuggestionsOpen(false), 200)}
                         required
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="City *"
                       />
                       {citySuggestionsOpen && formData.location.city && (
@@ -1509,7 +1636,7 @@ function JobPostingContent() {
                       name="location.address"
                       value={formData.location.address}
                       onChange={handleInputChange}
-                      className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       placeholder="Street Address (Optional)"
                     />
                   </div>
@@ -1532,7 +1659,7 @@ function JobPostingContent() {
                   onFocus={() => setJobTitleSuggestionsOpen(true)}
                   onBlur={() => setTimeout(() => setJobTitleSuggestionsOpen(false), 200)}
                   required
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                   placeholder="e.g., Senior Software Engineer"
                 />
                 {jobTitleSuggestionsOpen && formData.jobTitle && (
@@ -1566,7 +1693,7 @@ function JobPostingContent() {
                   value={formData.experience}
                   onChange={handleInputChange}
                   required
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                 >
                   <option value="">Select years of experience</option>
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(year => (
@@ -1586,7 +1713,7 @@ function JobPostingContent() {
                   value={formData.jobType}
                   onChange={handleInputChange}
                   required
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                 >
                   <option value="Full-time">Full-time</option>
                   <option value="Part-time">Part-time</option>
@@ -1608,7 +1735,7 @@ function JobPostingContent() {
                       name="salary.min"
                       value={formData.salary.min}
                       onChange={handleInputChange}
-                      className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       placeholder="Min ($)"
                       min="0"
                     />
@@ -1619,7 +1746,7 @@ function JobPostingContent() {
                       name="salary.max"
                       value={formData.salary.max}
                       onChange={handleInputChange}
-                      className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                      className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                       placeholder="Max ($)"
                       min="0"
                     />
@@ -1648,13 +1775,13 @@ function JobPostingContent() {
                         handleAddEducation();
                       }
                     }}
-                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                     placeholder="Enter education and press Enter or click Add"
                   />
                   <button
                     type="button"
                     onClick={handleAddEducation}
-                    className={`px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors`}
+                    className={`px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg transition-colors`}
                   >
                     Add
                   </button>
@@ -1686,7 +1813,7 @@ function JobPostingContent() {
                     {formData.education.map((edu, index) => (
                       <span
                         key={index}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-gray-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-gray-700 text-white' : 'bg-fuchsia-100 text-fuchsia-800'}`}
                       >
                         {edu}
                         <button
@@ -1723,13 +1850,13 @@ function JobPostingContent() {
                         handleAddCandidateLocation();
                       }
                     }}
-                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                     placeholder="Enter location preference and press Enter or click Add"
                   />
                   <button
                     type="button"
                     onClick={handleAddCandidateLocation}
-                    className={`px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors`}
+                    className={`px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg transition-colors`}
                   >
                     Add
                   </button>
@@ -1761,7 +1888,7 @@ function JobPostingContent() {
                     {formData.candidateLocation.map((loc, index) => (
                       <span
                         key={index}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-gray-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-gray-700 text-white' : 'bg-fuchsia-100 text-fuchsia-800'}`}
                       >
                         {loc}
                         <button
@@ -1798,13 +1925,13 @@ function JobPostingContent() {
                         handleAddLanguage();
                       }
                     }}
-                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                     placeholder="Enter language and press Enter or click Add"
                   />
                   <button
                     type="button"
                     onClick={handleAddLanguage}
-                    className={`px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors`}
+                    className={`px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg transition-colors`}
                   >
                     Add
                   </button>
@@ -1863,7 +1990,7 @@ function JobPostingContent() {
                   onChange={handleInputChange}
                   required
                   rows={6}
-                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 resize-none`}
                   placeholder="List the key responsibilities and requirements for this role..."
                 />
               </div>
@@ -1889,13 +2016,13 @@ function JobPostingContent() {
                         handleAddSkill();
                       }
                     }}
-                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                    className={`flex-1 px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                     placeholder="Enter skill and press Enter or click Add"
                   />
                   <button
                     type="button"
                     onClick={handleAddSkill}
-                    className={`px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors`}
+                    className={`px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg transition-colors`}
                   >
                     Add
                   </button>
@@ -1927,7 +2054,7 @@ function JobPostingContent() {
                     {formData.skills.map((skill, index) => (
                       <span
                         key={index}
-                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-gray-700 text-white' : 'bg-emerald-100 text-emerald-800'}`}
+                        className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${darkMode ? 'bg-gray-700 text-white' : 'bg-fuchsia-100 text-fuchsia-800'}`}
                       >
                         {skill}
                         <button
@@ -1964,7 +2091,7 @@ function JobPostingContent() {
                         onChange={handleInputChange}
                         min="0"
                         max="100"
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="0"
                       />
                     </div>
@@ -1979,7 +2106,7 @@ function JobPostingContent() {
                         onChange={handleInputChange}
                         min="0"
                         max="100"
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="0"
                       />
                     </div>
@@ -1994,7 +2121,7 @@ function JobPostingContent() {
                         onChange={handleInputChange}
                         min="0"
                         max="100"
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="0"
                       />
                     </div>
@@ -2009,7 +2136,7 @@ function JobPostingContent() {
                         onChange={handleInputChange}
                         min="0"
                         max="100"
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="0"
                       />
                     </div>
@@ -2024,7 +2151,7 @@ function JobPostingContent() {
                         onChange={handleInputChange}
                         min="0"
                         max="100"
-                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+                        className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
                         placeholder="0"
                       />
                     </div>
@@ -2046,7 +2173,7 @@ function JobPostingContent() {
                               type="text"
                               value={field.fieldName || ''}
                               onChange={(e) => handleCustomWeightageFieldChange(index, 'fieldName', e.target.value)}
-                              className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm`}
+                              className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 text-sm`}
                               placeholder="e.g., Certifications"
                             />
                           </div>
@@ -2061,7 +2188,7 @@ function JobPostingContent() {
                               onChange={(e) => handleCustomWeightageFieldChange(index, 'value', e.target.value)}
                               min="0"
                               max="100"
-                              className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm`}
+                              className={`w-full px-3 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 text-sm`}
                             />
                           </div>
                           <button
@@ -2084,7 +2211,7 @@ function JobPostingContent() {
                     + Add Custom Field
                   </button>
 
-                  <div className={`text-sm font-semibold ${getWeightageTotal() === 100 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  <div className={`text-sm font-semibold ${getWeightageTotal() === 100 ? 'text-fuchsia-600' : 'text-red-600'}`}>
                     Total: {getWeightageTotal()}% {getWeightageTotal() === 100 ? '✓' : '(Must be exactly 100%)'}
                   </div>
                 </div>
@@ -2103,7 +2230,7 @@ function JobPostingContent() {
                     onChange={handleInputChange}
                     min={new Date().toISOString().split('T')[0]}
                     required
-                    className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all appearance-none cursor-pointer`}
+                    className={`w-full px-4 py-2.5 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-fuchsia-500 transition-all appearance-none cursor-pointer`}
                     style={{
                       backgroundImage: darkMode 
                         ? `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5zM1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4H1z'/%3E%3C/svg%3E")`
@@ -2129,7 +2256,7 @@ function JobPostingContent() {
                 <button
                   type="submit"
                   disabled={isGenerating}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-fuchsia-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
                   {isGenerating ? 'Generating Description...' : (editingJobPost ? 'Update Job Post' : 'Generate & Post Job')}
                 </button>
@@ -2175,6 +2302,8 @@ function JobPostingContent() {
                   setAiImageBase64(null);
                   setShowRegeneratePrompt(false);
                   setRegenerateDescription("");
+                  setAiImageTheme("light");
+                  setSocialPostRetryJobId(null);
                 }}
                 className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
               >
@@ -2187,11 +2316,46 @@ function JobPostingContent() {
             <div className="flex-1 overflow-y-auto p-6">
               {isGenerating ? (
                 <div className="text-center py-12">
-                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-fuchsia-600"></div>
                   <p className={`mt-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Generating job description...</p>
                 </div>
               ) : showTemplateSelection ? (
                 <div className="space-y-6">
+                  {socialPostRetryJobId && (
+                    <div
+                      className={`rounded-lg border-2 p-4 ${darkMode ? "border-amber-500/50 bg-amber-950/25" : "border-amber-400 bg-amber-50"}`}
+                      role="alert"
+                    >
+                      <p className={`text-sm font-medium ${darkMode ? "text-amber-100" : "text-amber-900"}`}>
+                        The job post was saved, but posting to social media failed. Retry sends the same post to social channels again without creating a duplicate job.
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleRetrySocialPost}
+                          disabled={isRetryingSocialPost}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-fuchsia-400 disabled:cursor-not-allowed text-white transition-colors"
+                        >
+                          {isRetryingSocialPost ? (
+                            <>
+                              <span className="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                              Retrying…
+                            </>
+                          ) : (
+                            "Retry social media post"
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDismissSocialPostFailure}
+                          disabled={isRetryingSocialPost}
+                          className={`inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors ${darkMode ? "bg-gray-700 hover:bg-gray-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-800"}`}
+                        >
+                          Close (job saved)
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <h4 className={`text-lg font-semibold ${darkMode ? 'text-white' : 'text-gray-800'}`}>
                     Select an Image Template
                   </h4>
@@ -2207,7 +2371,7 @@ function JobPostingContent() {
                           onClick={() => setSelectedTemplate(templatePath)}
                           className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
                             isSelected 
-                              ? 'border-emerald-500 ring-2 ring-emerald-300' 
+                              ? 'border-fuchsia-500 ring-2 ring-fuchsia-300' 
                               : darkMode 
                               ? 'border-gray-600 hover:border-gray-500' 
                               : 'border-gray-300 hover:border-gray-400'
@@ -2222,8 +2386,8 @@ function JobPostingContent() {
                             }}
                           />
                           {isSelected && (
-                            <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
-                              <svg className="w-8 h-8 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                            <div className="absolute inset-0 bg-fuchsia-500/20 flex items-center justify-center">
+                              <svg className="w-8 h-8 text-fuchsia-600" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                               </svg>
                             </div>
@@ -2238,135 +2402,61 @@ function JobPostingContent() {
                     <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                       Or Generate AI Image
                     </label>
+                    <p className={`text-xs mb-3 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                      Choose a style. Light uses the editorial tech-poster brief; Dark uses the luxury dark-banner brief.
+                    </p>
                     
                     {!showAIImagePreview ? (
-                      <button
-                        onClick={async () => {
-                          if (!pendingJobData || !idToken) {
-                            toast.error("Missing data");
-                            return;
-                          }
-                          
-                          setIsGeneratingAIImage(true);
-                          try {
-                            const result = await generateAIImage(pendingJobData, generatedDescription, idToken, null);
-                            if (result.success) {
-                              // Check if we got a taskId (webhook-based flow)
-                              if (result.data.taskId) {
-                                const taskId = result.data.taskId;
-                                setAiImageTaskId(taskId);
-                                setIsPollingForImage(true);
-                                setIsGeneratingAIImage(false);
-                                toast.info('Image generation started. Waiting for result...', { autoClose: 3000 });
-                                
-                                // Start polling for result
-                                let pollAttempts = 0;
-                                const maxPollAttempts = 40; // 40 attempts * 3 seconds = 2 minutes
-                                
-                                const pollInterval = setInterval(async () => {
-                                  pollAttempts++;
-                                  console.log(`Polling attempt ${pollAttempts} for taskId: ${taskId}`);
-                                  
-                                  try {
-                                    const checkResult = await checkAIImageResult(taskId, idToken);
-                                    console.log('Poll result:', checkResult);
-                                    
-                                    if (checkResult.success && checkResult.data) {
-                                      if (checkResult.data.status === 'completed') {
-                                        clearInterval(pollInterval);
-                                        setIsPollingForImage(false);
-                                        
-                                        // Get image data - check all possible fields
-                                        const imageData = checkResult.data.imageBase64 || 
-                                                         checkResult.data.imageData || 
-                                                         checkResult.data.imageUrl;
-                                        if (imageData) {
-                                          // Accept both data URIs and HTTP URLs
-                                          if (imageData.startsWith('data:image') || imageData.startsWith('http')) {
-                                            setAiImageBase64(imageData);
-                                            setShowAIImagePreview(true);
-                                            // Also set as selected template (no Google Drive upload needed)
-                                            setSelectedTemplate(imageData);
-                                            setAiGeneratedImageUrl(imageData);
-                                            toast.success('AI image generated! Review and confirm to use.');
-                                          } else {
-                                            toast.error('Invalid image data format');
-                                          }
-                                        } else {
-                                          console.error('No image data in result:', checkResult.data);
-                                          toast.error('Image data not found in result');
-                                        }
-                                      } else if (checkResult.data.status === 'failed' || checkResult.data.status === 'error') {
-                                        clearInterval(pollInterval);
-                                        setIsPollingForImage(false);
-                                        toast.error('Image generation failed');
-                                      }
-                                      // If still pending, continue polling
-                                    } else if (checkResult.status === 'not_found') {
-                                      // Task not found yet, continue polling
-                                      console.log('Task not found yet, continuing to poll...');
-                                    } else {
-                                      // Error checking result
-                                      console.error('Error checking result:', checkResult.error);
-                                    }
-                                  } catch (error) {
-                                    console.error('Polling error:', error);
-                                  }
-                                  
-                                  // Stop polling after max attempts
-                                  if (pollAttempts >= maxPollAttempts) {
-                                    clearInterval(pollInterval);
-                                    setIsPollingForImage(false);
-                                    toast.error('Image generation timed out. Please try again.');
-                                  }
-                                }, 3000); // Poll every 3 seconds
-                              } else if (result.data.imageBase64) {
-                                // Direct response (if API returns immediately - fallback)
-                                setAiImageBase64(result.data.imageBase64);
-                                setShowAIImagePreview(true);
-                                setIsGeneratingAIImage(false);
-                                toast.success('AI image generated! Review and confirm to upload.');
-                              } else if (result.data.imageUrl) {
-                                // Direct URL
-                                setAiGeneratedImageUrl(result.data.imageUrl);
-                                setSelectedTemplate(result.data.imageUrl);
-                                setIsGeneratingAIImage(false);
-                                toast.success('AI image generated successfully!');
-                              } else {
-                                toast.error('Unexpected response format');
-                                setIsGeneratingAIImage(false);
-                              }
-                            } else {
-                              toast.error(result.error || 'Failed to generate AI image');
-                              setIsGeneratingAIImage(false);
-                            }
-                          } catch (error) {
-                            console.error('AI image generation error:', error);
-                            toast.error('Failed to generate AI image');
-                            setIsGeneratingAIImage(false);
-                          }
-                        }}
-                        disabled={isGeneratingAIImage || isPollingForImage}
-                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                          isGeneratingAIImage
-                            ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-purple-600 hover:bg-purple-700 text-white'
-                        }`}
-                      >
-                        {(isGeneratingAIImage || isPollingForImage) ? (
-                          <>
-                            <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            <span>{isPollingForImage ? 'Waiting for image...' : 'Generating AI Image...'}</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                            </svg>
-                            <span>Generate AI Image</span>
-                          </>
-                        )}
-                      </button>
+                      <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => startAiImageGeneration("light", null)}
+                          disabled={isGeneratingAIImage || isPollingForImage}
+                          className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-colors font-medium ${
+                            isGeneratingAIImage || isPollingForImage
+                              ? "bg-gray-400 cursor-not-allowed text-white"
+                              : "bg-white border-2 border-fuchsia-500 text-fuchsia-700 hover:bg-fuchsia-50"
+                          }`}
+                        >
+                          {(isGeneratingAIImage || isPollingForImage) && aiImageTheme === "light" ? (
+                            <>
+                              <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-fuchsia-600"></div>
+                              <span>{isPollingForImage ? "Waiting…" : "Generating…"}</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                              </svg>
+                              Light / editorial poster
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => startAiImageGeneration("dark", null)}
+                          disabled={isGeneratingAIImage || isPollingForImage}
+                          className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg transition-colors font-medium ${
+                            isGeneratingAIImage || isPollingForImage
+                              ? "bg-gray-400 cursor-not-allowed text-white"
+                              : "bg-gray-900 text-white hover:bg-gray-800 ring-2 ring-fuchsia-500/60"
+                          }`}
+                        >
+                          {(isGeneratingAIImage || isPollingForImage) && aiImageTheme === "dark" ? (
+                            <>
+                              <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                              <span>{isPollingForImage ? "Waiting…" : "Generating…"}</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                              </svg>
+                              Dark luxury banner
+                            </>
+                          )}
+                        </button>
+                      </div>
                     ) : (
                       <div className="space-y-4">
                         {/* Preview Section */}
@@ -2396,7 +2486,7 @@ function JobPostingContent() {
                                 setAiImageBase64(null);
                                 toast.success('AI image selected!');
                               }}
-                              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+                              className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
                             >
                               Use This Image
                             </button>
@@ -2440,7 +2530,13 @@ function JobPostingContent() {
                                 onClick={async () => {
                                   setIsGeneratingAIImage(true);
                                   try {
-                                    const result = await generateAIImage(pendingJobData, generatedDescription, idToken, regenerateDescription);
+                                    const result = await generateAIImage(
+                                      pendingJobData,
+                                      generatedDescription,
+                                      idToken,
+                                      regenerateDescription,
+                                      { theme: aiImageTheme }
+                                    );
                                     if (result.success) {
                                       if (result.data.taskId) {
                                         // Webhook-based flow
@@ -2597,7 +2693,7 @@ function JobPostingContent() {
                           value={generatedDescription}
                           onChange={(e) => setGeneratedDescription(e.target.value)}
                           rows={12}
-                          className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
+                          className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 resize-none`}
                           placeholder="Job description will appear here..."
                         />
                       </div>
@@ -2612,7 +2708,7 @@ function JobPostingContent() {
                           value={editFeedback}
                           onChange={(e) => setEditFeedback(e.target.value)}
                           rows={6}
-                          className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none`}
+                          className={`w-full px-4 py-2 rounded-lg border ${darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300'} focus:outline-none focus:ring-2 focus:ring-fuchsia-500 resize-none`}
                           placeholder="e.g., Make it more technical, add more benefits, emphasize remote work opportunities..."
                         />
                       </div>
@@ -2620,7 +2716,7 @@ function JobPostingContent() {
                         <button
                           onClick={handleRegenerateDescription}
                           disabled={!editFeedback.trim() || isGenerating}
-                          className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+                          className="px-6 py-2 bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-fuchsia-400 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
                         >
                           {isGenerating ? 'Regenerating...' : 'Regenerate'}
                         </button>
@@ -2646,7 +2742,7 @@ function JobPostingContent() {
                   onClick={() => {
                     setShowTemplateSelection(true);
                   }}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
                   Next: Select Image
                 </button>
@@ -2662,10 +2758,10 @@ function JobPostingContent() {
               <div className={`px-6 py-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'} flex gap-3`}>
                 <button
                   onClick={handleLooksGood}
-                  disabled={!selectedTemplate}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                  disabled={!selectedTemplate || !!socialPostRetryJobId || isSavingJobPost}
+                  className="flex-1 bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-fuchsia-400 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
                 >
-                  Looks Good - Save Post
+                  {isSavingJobPost ? "Saving & posting…" : "Looks Good - Save Post"}
                 </button>
                 <button
                   onClick={() => {

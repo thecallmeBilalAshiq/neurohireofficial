@@ -3,15 +3,17 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "../../../components/ProtectedRoute";
+import BrandLogo from "../../../components/BrandLogo";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { toast } from "react-toastify";
 import { getDashboardStatistics } from "../../../lib/api";
+import { useHrDarkMode } from "../../../lib/useHrDarkMode";
 
 function HRDashboardContent() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useHrDarkMode();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showMenuItems, setShowMenuItems] = useState(true);
@@ -31,19 +33,6 @@ function HRDashboardContent() {
     }
   });
   const [loadingStats, setLoadingStats] = useState(true);
-
-  // Load dark mode preference from localStorage on mount
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode !== null) {
-      setDarkMode(savedDarkMode === 'true');
-    }
-  }, []);
-
-  // Save dark mode preference to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('darkMode', darkMode.toString());
-  }, [darkMode]);
 
   // Load errors from localStorage on mount
   useEffect(() => {
@@ -236,7 +225,7 @@ function HRDashboardContent() {
   };
 
   return (
-    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen flex ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/30 to-violet-50/40'}`}>
       <style>{`
         body {
           background: ${darkMode ? '#111827' : '#f9fafb'};
@@ -262,16 +251,13 @@ function HRDashboardContent() {
         <div className={`${sidebarCollapsed ? 'p-3' : 'p-6'} border-b ${darkMode ? 'border-gray-700' : 'border-gray-200'} relative`}>
           <div className={`flex items-center ${sidebarCollapsed ? 'justify-center' : 'justify-between'} gap-3`}>
             {!sidebarCollapsed && (
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-10 h-10 bg-linear-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-black text-lg">NH</span>
-                </div>
-                <span className={`text-xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>NeuroHire</span>
+              <div className="flex items-center gap-2 flex-1 min-w-0 py-1">
+                <BrandLogo className={`h-24 w-auto max-h-[6.5rem] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
               </div>
             )}
             {sidebarCollapsed && (
-              <div className="w-10 h-10 bg-linear-to-br from-cyan-400 via-teal-400 to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
-                <span className="text-white font-black text-lg">NH</span>
+              <div className="flex justify-center w-full py-1">
+                <BrandLogo className={`h-16 w-auto max-h-[5rem] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
               </div>
             )}
             {/* Sidebar Toggle Button - Always visible */}
@@ -574,8 +560,8 @@ function HRDashboardContent() {
             {/* Active Jobs */}
             <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-4 sm:p-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
               <div className="flex items-center justify-between mb-4">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-fuchsia-100 rounded-full flex items-center justify-center">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-fuchsia-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
@@ -673,7 +659,7 @@ function HRDashboardContent() {
               </div>
               {loadingStats ? (
                 <div className="h-48 sm:h-64 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600"></div>
                 </div>
               ) : (
                 <>
@@ -787,7 +773,7 @@ function HRDashboardContent() {
               </div>
               {loadingStats ? (
                 <div className="h-48 sm:h-64 flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600"></div>
                 </div>
               ) : (
                 <div className="h-48 sm:h-64 overflow-x-auto">

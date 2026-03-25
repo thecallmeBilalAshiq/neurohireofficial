@@ -330,27 +330,27 @@ function TestTakeContent() {
           <span className="font-semibold text-slate-800 dark:text-white">
             {section === "mcq" ? "MCQ Section (30 marks)" : "Coding Section (70 marks)"}
           </span>
-          <span className="text-2xl font-mono text-teal-600 dark:text-teal-400">{formatTime(timeLeftSeconds)}</span>
+          <span className="text-2xl font-mono text-violet-600 dark:text-violet-400">{formatTime(timeLeftSeconds)}</span>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={() => setSection("mcq")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${section === "mcq" ? "bg-teal-600 text-white" : "bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300"}`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${section === "mcq" ? "bg-violet-600 text-white" : "bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300"}`}
           >
             MCQs
           </button>
           <button
             type="button"
             onClick={() => setSection("coding")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${section === "coding" ? "bg-teal-600 text-white" : "bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300"}`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium ${section === "coding" ? "bg-violet-600 text-white" : "bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300"}`}
           >
             Coding
           </button>
           <button
             type="button"
             onClick={handleSubmit}
-            className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700"
+            className="px-4 py-1.5 rounded-lg bg-fuchsia-600 text-white text-sm font-medium hover:bg-fuchsia-700"
           >
             Submit test
           </button>
@@ -379,7 +379,7 @@ function TestTakeContent() {
                         name={`mcq-${i}`}
                         checked={((mcqAnswers[i] || {}).selectedIndex ?? -1) === j}
                         onChange={() => handleMcqSelect(i, j)}
-                        className="text-teal-600 focus:ring-teal-500"
+                        className="text-violet-600 focus:ring-violet-500"
                       />
                       <span className="text-slate-700 dark:text-slate-300">{opt}</span>
                     </label>
@@ -429,7 +429,7 @@ function TestTakeContent() {
                     <textarea
                       value={sub.code || ""}
                       onChange={(e) => handleCodingChange(i, e.target.value)}
-                      className="w-full h-40 font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-3 focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                      className="w-full h-40 font-mono text-sm rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 p-3 focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
                       placeholder="Write your solution here..."
                       spellCheck={false}
                     />
@@ -447,7 +447,7 @@ function TestTakeContent() {
                         type="button"
                         onClick={() => handleRunCode(i, getStdinForQuestion(i))}
                         disabled={runLoading || status !== "in_progress"}
-                        className="px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                       >
                         {runLoading ? "Running…" : "Run code"}
                       </button>

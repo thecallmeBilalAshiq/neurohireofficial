@@ -168,10 +168,10 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-fuchsia-50/40 to-violet-50/50">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mb-4"></div>
-          <p className="text-gray-600">Verifying authentication...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600 mb-4"></div>
+          <p className="text-violet-900/70">Verifying authentication...</p>
         </div>
       </div>
     );

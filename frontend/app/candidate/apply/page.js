@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import ProtectedRoute from "../../../components/ProtectedRoute";
+import BrandLogo from "../../../components/BrandLogo";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { getActiveJobsForCandidates, getJobPostById } from "../../../lib/api";
@@ -82,10 +83,10 @@ function ApplyToJobContent() {
   });
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+    <div className={`min-h-screen ${darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-white via-fuchsia-50/25 to-violet-50/35'}`}>
       <style>{`
         body {
-          background: ${darkMode ? '#111827' : '#f9fafb'};
+          background: ${darkMode ? '#111827' : 'linear-gradient(135deg, #ffffff 0%, #fdf4ff 50%, #f5f3ff 100%)'};
           min-height: 100vh;
         }
       `}</style>
@@ -102,16 +103,19 @@ function ApplyToJobContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
             </button>
-            <div>
+            <div className="flex items-center gap-4 min-w-0">
+              <BrandLogo className={`hidden sm:block h-12 w-auto max-w-[140px] shrink-0 ${darkMode ? 'brightness-110' : ''}`} />
+              <div className="min-w-0">
               <h1 className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>Apply to Job</h1>
               <p className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'} mt-0.5`}>Browse and apply to available positions</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className={`p-4 sm:p-6 ${darkMode ? 'bg-gray-900' : 'bg-gray-50'}`}>
+      <div className={`p-4 sm:p-6 ${darkMode ? 'bg-gray-900' : 'bg-transparent'}`}>
         {/* Search Bar */}
         <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-4 mb-6 border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
           <div className="relative">
@@ -120,7 +124,7 @@ function ApplyToJobContent() {
               placeholder="Search jobs by title, company, or location..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500`}
+              className={`w-full pl-10 pr-4 py-2 ${darkMode ? 'bg-gray-700 text-white border-gray-600' : 'bg-gray-50 text-gray-900 border-gray-300'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500`}
             />
             <svg className={`absolute left-3 top-2.5 w-5 h-5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -131,7 +135,7 @@ function ApplyToJobContent() {
         {/* Jobs Table */}
         {loading ? (
           <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-fuchsia-600"></div>
           </div>
         ) : filteredJobs.length === 0 ? (
           <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-sm p-8 text-center border ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
@@ -211,7 +215,7 @@ function ApplyToJobContent() {
                         ) : (
                           <button
                             onClick={() => handleApply(job._id)}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition-colors"
+                            className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white px-4 py-2 rounded-lg transition-colors"
                           >
                             Apply
                           </button>
@@ -251,7 +255,7 @@ function ApplyToJobContent() {
               </button>
               <button
                 onClick={handleConfirmApply}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors"
+                className="px-4 py-2 bg-fuchsia-500 hover:bg-fuchsia-600 text-white rounded-lg transition-colors"
               >
                 I Understand, Continue
               </button>

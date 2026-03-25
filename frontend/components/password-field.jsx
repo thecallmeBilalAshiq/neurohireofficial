@@ -26,7 +26,7 @@ export default function PasswordField({ label, id, placeholder, register, errors
           type={showPassword ? "text" : "password"}
           placeholder={placeholder}
           {...register(fieldName, { required })}
-          className={`w-full px-4 py-2.5 pr-10 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+          className={`w-full px-4 py-2.5 pr-10 rounded-lg border focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent transition-all ${
             darkMode 
               ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400' 
               : 'border-slate-300 text-slate-900 placeholder-slate-400'

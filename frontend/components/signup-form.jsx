@@ -6,6 +6,7 @@ import { toast } from "react-toastify"
 import PasswordField from "./password-field"
 import PasswordStrengthHint from "./password-strength-hint"
 import LoadingSpinner from "./loading-spinner"
+import BrandLogo from "./BrandLogo"
 
 export default function SignupForm() {
   const [isLoading, setIsLoading] = useState(false)
@@ -53,10 +54,9 @@ export default function SignupForm() {
       <div className="bg-white rounded-xl shadow-2xl p-8 border border-slate-200">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-lg mb-3">
-            <span className="text-white font-bold text-lg">NH</span>
+          <div className="flex justify-center mb-4">
+            <BrandLogo className="h-28 w-auto max-w-[240px]" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">NeuroHire</h1>
           <p className="text-slate-500 text-sm mt-1">Create your account</p>
         </div>
 
@@ -72,7 +72,7 @@ export default function SignupForm() {
               type="text"
               placeholder="John Doe"
               {...register("name", { required: "Name is required" })}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 placeholder-slate-400 transition-all"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent text-slate-900 placeholder-slate-400 transition-all"
             />
             {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
           </div>
@@ -93,7 +93,7 @@ export default function SignupForm() {
                   message: "Please enter a valid email",
                 },
               })}
-              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 placeholder-slate-400 transition-all"
+              className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent text-slate-900 placeholder-slate-400 transition-all"
             />
             {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>}
           </div>
@@ -128,7 +128,7 @@ export default function SignupForm() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full mt-6 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
+          className="w-full mt-6 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl"
         >
           {isLoading ? (
             <>
@@ -143,7 +143,7 @@ export default function SignupForm() {
         {/* Login Link */}
         <p className="text-center text-slate-600 text-sm mt-4">
           Already have an account?{" "}
-          <a href="/login" className="text-blue-600 font-semibold hover:text-blue-700 transition-colors">
+          <a href="/login" className="text-fuchsia-600 font-semibold hover:text-violet-700 transition-colors">
             Log in
           </a>
         </p>
