@@ -40,7 +40,7 @@
 
 <div align="center">
 
-# 🚀 Full-Stack Project
+# 🚀 AI-based Hiring System
 
 > A comprehensive full-stack application integrating Firebase, AI APIs, automation workflows, and tunneling for local development.
 
