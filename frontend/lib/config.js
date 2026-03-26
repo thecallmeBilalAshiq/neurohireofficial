@@ -63,6 +63,9 @@ const config = {
       autofill: '/cv/autofill',
       template: '/cv/template',
     },
+    contact: {
+      submit: '/contact',
+    },
   },
 
   // Frontend Routes

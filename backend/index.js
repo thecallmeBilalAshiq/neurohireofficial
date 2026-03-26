@@ -12,6 +12,7 @@ const aiImageRoutes = require('./routes/aiImage');
 const applicationRoutes = require('./routes/applications');
 const cvRoutes = require('./routes/cv');
 const testRoutes = require('./routes/test');
+const contactRoutes = require('./routes/contact');
 
 dotenv.config();
 
@@ -65,6 +66,7 @@ app.use('/api/ai-image', aiImageRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/cv', cvRoutes);
 app.use('/api/test', testRoutes);
+app.use('/api/contact', contactRoutes);
 
 
 // Health check endpoint
