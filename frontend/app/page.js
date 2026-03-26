@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Script from "next/script";
+import config from "../lib/config";
 import "./landing.css";
 
 export default function LandingPage() {
@@ -239,7 +240,19 @@ export default function LandingPage() {
           }
         }}
       />
-      <Script src="https://unpkg.com/aos@next/dist/aos.js" strategy="lazyOnload" />
+      <Script
+        src="https://unpkg.com/aos@next/dist/aos.js"
+        strategy="afterInteractive"
+        onLoad={() => {
+          if (typeof window !== "undefined" && window.AOS) {
+            window.AOS.init({
+              once: true,
+              offset: 100,
+              duration: 800,
+            });
+          }
+        }}
+      />
       <Script
         src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.7.0/vanilla-tilt.min.js"
         strategy="lazyOnload"
@@ -745,24 +758,20 @@ export default function LandingPage() {
           <div className="section-title-container">
             <span className="section-subtitle">Our Journey</span>
             <p className="section-description">
-              Key milestones in NeuroHire&apos;s growth and innovation.
+              How we deliver NeuroHire modules end-to-end: discovery → design → build → test.
             </p>
           </div>
 
           <div className="timeline-container">
             <div className="timeline-item" data-aos="fade-right" data-aos-duration="1000">
               <div className="timeline-content">
-                <span className="timeline-date">
-                  <i className="fas fa-calendar-alt"></i> July - August 2025
-                </span>
-                <h3 className="timeline-title">Launching of Idea</h3>
+                <h3 className="timeline-title">1) Requirements Gathering</h3>
                 <div className="timeline-subtitle">
-                  <i className="fas fa-lightbulb"></i> Conceptualization & Vision
+                  <i className="fas fa-clipboard-list"></i> Capture needs & acceptance criteria
                 </div>
                 <p className="timeline-description">
-                  Initiated the NeuroHire project with comprehensive ideation sessions. Defined the
-                  core vision of revolutionizing recruitment through AI and identified key market
-                  opportunities.
+                  We gather requirements with HR, map user journeys, list edge cases, and convert
+                  everything into clear acceptance criteria for each module.
                 </p>
               </div>
             </div>
@@ -774,17 +783,13 @@ export default function LandingPage() {
               data-aos-delay="200"
             >
               <div className="timeline-content">
-                <span className="timeline-date">
-                  <i className="fas fa-calendar-alt"></i> August - October 2025
-                </span>
-                <h3 className="timeline-title">SRS Document</h3>
+                <h3 className="timeline-title">2) Design & Planning</h3>
                 <div className="timeline-subtitle">
-                  <i className="fas fa-file-alt"></i> Software Requirements Specification
+                  <i className="fas fa-sitemap"></i> UX, architecture, integrations
                 </div>
                 <p className="timeline-description">
-                  Completed comprehensive Software Requirements Specification document. Detailed
-                  system architecture, functional requirements, and technical specifications for the
-                  AI recruitment platform.
+                  We design the UI/UX, define data models and API contracts, and plan integrations
+                  like Firebase Auth, MongoDB, and n8n webhooks.
                 </p>
               </div>
             </div>
@@ -796,17 +801,31 @@ export default function LandingPage() {
               data-aos-delay="400"
             >
               <div className="timeline-content">
-                <span className="timeline-date">
-                  <i className="fas fa-calendar-alt"></i> October - December 2025
-                </span>
-                <h3 className="timeline-title">Front End Development</h3>
+                <h3 className="timeline-title">3) Implementation (4 Core Modules)</h3>
                 <div className="timeline-subtitle">
-                  <i className="fas fa-code"></i> User Interface & Experience
+                  <i className="fas fa-code"></i> Build, integrate, secure
                 </div>
                 <p className="timeline-description">
-                  Built the complete front-end platform with modern React components. Designed
-                  intuitive user interfaces for recruiters and candidates with responsive design and
-                  seamless interactions.
+                  We implement the core modules: Job Posting, Candidate Applications, AI Ranking,
+                  and Online Tests — with protected routes, secure APIs, and consistent UI themes.
+                </p>
+              </div>
+            </div>
+
+            <div
+              className="timeline-item"
+              data-aos="fade-left"
+              data-aos-duration="1000"
+              data-aos-delay="600"
+            >
+              <div className="timeline-content">
+                <h3 className="timeline-title">4) Testing & Iteration</h3>
+                <div className="timeline-subtitle">
+                  <i className="fas fa-vial"></i> Validate end-to-end flows
+                </div>
+                <p className="timeline-description">
+                  We test UI → API → webhooks → AI generation end-to-end, fix issues quickly, and
+                  iterate until the module is stable and ready to ship.
                 </p>
               </div>
             </div>
@@ -965,7 +984,7 @@ export default function LandingPage() {
             >
               <div className="team-img-container">
                 <img
-                  src="https://ui-avatars.com/api/?name=Faiez+Tariq&background=43cea2&color=fff&size=256"
+                  src="https://github.com/faiez123tariq.png"
                   alt="Faiez Tariq"
                   className="team-img"
                 />
@@ -996,7 +1015,7 @@ export default function LandingPage() {
             >
               <div className="team-img-container">
                 <img
-                  src="https://ui-avatars.com/api/?name=Buhsra+Abad&background=ff4b8b&color=fff&size=256"
+                  src="https://github.com/Bushra-Abad.png"
                   alt="Buhsra Abad"
                   className="team-img"
                 />
@@ -1043,7 +1062,7 @@ export default function LandingPage() {
                   </div>
                   <div className="contact-info-content">
                     <h3>Email</h3>
-                    <a href="mailto:contact@neurohire.ai">contact@neurohire.ai</a>
+                    <a href="mailto:neurohireofficial@gmail.com">neurohireofficial@gmail.com</a>
                   </div>
                 </div>
 
@@ -1053,7 +1072,7 @@ export default function LandingPage() {
                   </div>
                   <div className="contact-info-content">
                     <h3>Phone</h3>
-                    <a href="tel:+12025550123">+1 (202) 555-0123</a>
+                    <a href="tel:+923266134300">+92 326 6134300</a>
                   </div>
                 </div>
 
@@ -1063,7 +1082,7 @@ export default function LandingPage() {
                   </div>
                   <div className="contact-info-content">
                     <h3>Location</h3>
-                    <p>San Francisco, CA | Remote-First</p>
+                    <p>Faisalabad, Pakistan | Remote-First</p>
                   </div>
                 </div>
               </div>
@@ -1076,27 +1095,60 @@ export default function LandingPage() {
                   <i className="fas fa-check-circle"></i> Thank you for your message! I&apos;ll get
                   back to you soon.
                 </div>
+                <div id="form-error" className="form-error" role="alert">
+                  <i className="fas fa-exclamation-circle"></i>
+                  <span id="form-error-text"></span>
+                </div>
                 <form
                   id="contact-form"
-                  onSubmit={(e) => {
+                  onSubmit={async (e) => {
                     e.preventDefault();
-                    const submitBtn = e.target.querySelector(".submit-btn");
+                    const form = e.currentTarget;
+                    const submitBtn = form.querySelector(".submit-btn");
                     const formSuccess = document.getElementById("form-success");
+                    const formError = document.getElementById("form-error");
+                    const formErrorText = document.getElementById("form-error-text");
                     const originalBtnText = submitBtn.innerHTML;
+
+                    formError?.classList.remove("active");
+                    if (formErrorText) formErrorText.textContent = "";
 
                     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
                     submitBtn.disabled = true;
 
-                    setTimeout(() => {
-                      e.target.reset();
+                    const fd = new FormData(form);
+                    const body = {
+                      name: fd.get("name"),
+                      email: fd.get("email"),
+                      subject: fd.get("subject"),
+                      message: fd.get("message"),
+                    };
+
+                    const url = `${config.api.getBaseUrl()}${config.endpoints.contact.submit}`;
+
+                    try {
+                      const res = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                      });
+                      const data = await res.json().catch(() => ({}));
+                      if (!res.ok) {
+                        throw new Error(data.error || "Something went wrong. Please try again.");
+                      }
+                      form.reset();
                       formSuccess?.classList.add("active");
+                      setTimeout(() => formSuccess?.classList.remove("active"), 5000);
+                    } catch (err) {
+                      if (formErrorText) {
+                        formErrorText.textContent =
+                          err instanceof Error ? err.message : "Failed to send message.";
+                      }
+                      formError?.classList.add("active");
+                    } finally {
                       submitBtn.innerHTML = originalBtnText;
                       submitBtn.disabled = false;
-
-                      setTimeout(() => {
-                        formSuccess?.classList.remove("active");
-                      }, 5000);
-                    }, 1500);
+                    }
                   }}
                 >
                   <div className="form-row">
@@ -1261,15 +1313,15 @@ export default function LandingPage() {
             <div>
               <h3 className="footer-heading">Contact Info</h3>
               <div className="footer-links">
-                <a href="mailto:contact@neurohire.ai" className="footer-link">
-                  <i className="fas fa-envelope"></i> contact@neurohire.ai
+                <a href="mailto:neurohireofficial@gmail.com" className="footer-link">
+                  <i className="fas fa-envelope"></i> neurohireofficial@gmail.com
                 </a>
-                <a href="tel:+12025550123" className="footer-link">
-                  <i className="fas fa-phone"></i> +1 (202) 555-0123
+                <a href="tel:+923266134300" className="footer-link">
+                  <i className="fas fa-phone"></i> +92 326 6134300
                 </a>
-                <a href="#" className="footer-link">
-                  <i className="fas fa-map-marker-alt"></i> San Francisco, CA | Remote-First
-                </a>
+                <span className="footer-link" style={{ cursor: "default" }}>
+                  <i className="fas fa-map-marker-alt"></i> Faisalabad, Pakistan | Remote-First
+                </span>
               </div>
             </div>
           </div>
@@ -1281,19 +1333,6 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-
-      {/* Initialize AOS */}
-      <Script id="init-aos" strategy="lazyOnload">
-        {`
-          if (typeof AOS !== 'undefined') {
-            AOS.init({
-              once: true,
-              offset: 100,
-              duration: 800
-            });
-          }
-        `}
-      </Script>
 
       {/* Initialize Vanilla Tilt */}
       <Script id="init-tilt" strategy="lazyOnload">

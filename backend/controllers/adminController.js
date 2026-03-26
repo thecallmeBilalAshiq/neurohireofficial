@@ -49,16 +49,15 @@ exports.createHR = async (req, res) => {
       // User doesn't exist - that's fine, we'll create it
     }
 
-    // Check if user exists in MongoDB (case-insensitive; only when email is valid to avoid findOne(undefined) bug)
+    // Check if user exists in MongoDB (case-insensitive).
+    // If the Mongo user exists but Firebase user does NOT, it's likely a stale record (previously deleted in Firebase)
+    // or a candidate account we want to promote. In both cases, we should update/reuse the record instead of blocking.
     const emailMatchRegex = new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
     const existingMongoUser = await User.findOne({ email: emailMatchRegex });
-    if (existingMongoUser) {
-      return res.status(400).json({ error: 'User with this email already exists in the system' });
-    }
 
     // Create HR account in Firebase
     const firebaseUser = await admin.auth().createUser({
-      email: email,
+      email: normalizedEmail,
       password: password,
       displayName: name,
       emailVerified: true, // Auto-verify for HR accounts created by admin
@@ -71,16 +70,24 @@ exports.createHR = async (req, res) => {
       createdBy: 'admin'
     });
 
-    // Create corresponding MongoDB user document
-    const mongoUser = new User({
-      firebaseUid: firebaseUser.uid,
-      email: email,
-      name: name,
-      role: 'HR',
-      emailVerified: true,
-    });
-
-    await mongoUser.save();
+    // Create or update corresponding MongoDB user document
+    if (existingMongoUser) {
+      existingMongoUser.firebaseUid = firebaseUser.uid;
+      existingMongoUser.email = normalizedEmail;
+      existingMongoUser.name = name;
+      existingMongoUser.role = 'HR';
+      existingMongoUser.emailVerified = true;
+      await existingMongoUser.save();
+    } else {
+      const mongoUser = new User({
+        firebaseUid: firebaseUser.uid,
+        email: normalizedEmail,
+        name: name,
+        role: 'HR',
+        emailVerified: true,
+      });
+      await mongoUser.save();
+    }
 
     res.status(201).json({
       success: true,
