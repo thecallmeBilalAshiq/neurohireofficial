@@ -59,6 +59,24 @@ const jobPostSchema = new mongoose.Schema({
     default: 'pending' 
   },
   evaluatedAt: { type: Date, default: null },
+  /** Hiring pipeline (Finalize Hire / onboarding flow) */
+  hirePipelineStage: {
+    type: String,
+    enum: ['ranking', 'test_ready', 'test_sent', 'physical_invite_sent', 'awaiting_final_hire', 'finished'],
+    default: 'ranking',
+  },
+  testContentFinalizedAt: { type: Date, default: null },
+  assessmentInviteSentAt: { type: Date, default: null },
+  /** End of the online test invite window (`TestInvitation.expiresAt`; currently ~10 min from send) */
+  assessmentDeadline: { type: Date, default: null },
+  physicalInterviewDate: { type: String, default: '' },
+  physicalInterviewTime: { type: String, default: '' },
+  physicalInterviewLocation: { type: String, default: '' },
+  physicalInterviewEmailSentAt: { type: Date, default: null },
+  awaitingFinalHireSelection: { type: Boolean, default: false },
+  finalHireCompletedAt: { type: Date, default: null },
+  /** HR explicitly chose no acceptable candidate at final step */
+  noHireSelected: { type: Boolean, default: false },
   createdBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 

@@ -4,6 +4,7 @@ const TestMcqPool = require('../models/TestMcqPool');
 const CodingQuestion = require('../models/CodingQuestion');
 const JobPost = require('../models/JobPost');
 const { runCode } = require('../services/codeRunService');
+const { CODING_PROBLEM_COUNT } = require('../config/assessmentConfig');
 
 const TEST_DURATION_MINUTES = 120;
 const MAX_VIOLATIONS_BEFORE_DISQUALIFY = 5;
@@ -47,7 +48,7 @@ exports.validateToken = async (req, res) => {
   }
 };
 
-// Start test: create attempt, return 30 random MCQs + 7 coding questions (no auth; token in body)
+// Start test: create attempt, return 30 random MCQs + coding questions (no auth; token in body)
 exports.startTest = async (req, res) => {
   try {
     const { token } = req.body;
@@ -75,7 +76,7 @@ exports.startTest = async (req, res) => {
         error: 'Test questions are not ready yet. Please try again in a few minutes. If the problem persists, contact the recruiter.',
       });
     }
-    if (!codingDoc || !codingDoc.questions || codingDoc.questions.length < 7) {
+    if (!codingDoc || !codingDoc.questions || codingDoc.questions.length < CODING_PROBLEM_COUNT) {
       return res.status(503).json({
         error: 'Coding questions are not ready yet. Please try again in a few minutes.',
       });
@@ -93,7 +94,8 @@ exports.startTest = async (req, res) => {
       return { questionText: q.questionText, options: q.options }; // do not send correctIndex
     });
 
-    const codingQuestions = codingDoc.questions.map(q => ({
+    const codingPool = codingDoc.questions.slice(0, CODING_PROBLEM_COUNT);
+    const codingQuestions = codingPool.map((q) => ({
       title: q.title,
       statement: q.statement,
       inputFormat: q.inputFormat,
@@ -114,7 +116,7 @@ exports.startTest = async (req, res) => {
         testInvitation: invitation._id,
         mcqOrder,
         mcqAnswers: mcqOrder.map((_, i) => ({ questionIndex: i, selectedIndex: -1 })),
-        codingSubmissions: codingDoc.questions.map((_, i) => ({ questionIndex: i, code: '', language: 'javascript' })),
+        codingSubmissions: codingPool.map((_, i) => ({ questionIndex: i, code: '', language: 'javascript' })),
       });
       await attempt.save();
       await TestInvitation.updateOne({ _id: invitation._id }, { status: 'attempted' });
@@ -163,7 +165,8 @@ exports.getAttempt = async (req, res) => {
       const q = mcqPool.questions[i];
       return { questionText: q.questionText, options: q.options };
     });
-    const codingQuestions = codingDoc.questions.map(q => ({
+    const codingPool = codingDoc.questions.slice(0, CODING_PROBLEM_COUNT);
+    const codingQuestions = codingPool.map((q) => ({
       title: q.title,
       statement: q.statement,
       inputFormat: q.inputFormat,
@@ -173,6 +176,7 @@ exports.getAttempt = async (req, res) => {
       constraints: q.constraints,
       difficulty: q.difficulty,
     }));
+    const codingSubmissions = (attempt.codingSubmissions || []).slice(0, CODING_PROBLEM_COUNT);
     res.json({
       attemptId: attempt._id,
       status: attempt.status,
@@ -181,7 +185,7 @@ exports.getAttempt = async (req, res) => {
       mcqQuestions,
       codingQuestions,
       mcqAnswers: attempt.mcqAnswers,
-      codingSubmissions: attempt.codingSubmissions,
+      codingSubmissions,
       violationCount: attempt.violationCount,
     });
   } catch (error) {
@@ -210,7 +214,7 @@ exports.saveProgress = async (req, res) => {
       attempt.mcqAnswers = mcqAnswers;
     }
     if (Array.isArray(codingSubmissions)) {
-      attempt.codingSubmissions = codingSubmissions;
+      attempt.codingSubmissions = codingSubmissions.slice(0, CODING_PROBLEM_COUNT);
     }
     if (typeof violationCount === 'number' && violationCount >= 0) {
       attempt.violationCount = violationCount;
@@ -261,11 +265,11 @@ exports.runCode = async (req, res) => {
   }
 };
 
-// Submit test (then trigger background LLM evaluation)
+// Submit test (then trigger background LLM evaluation), or end as disqualified (proctoring — no score)
 exports.submitTest = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const { token, mcqAnswers, codingSubmissions } = req.body;
+    const { token, mcqAnswers, codingSubmissions, proctoringDisqualification } = req.body;
     if (!attemptId || !token) {
       return res.status(400).json({ error: 'attemptId and token are required' });
     }
@@ -278,9 +282,29 @@ exports.submitTest = async (req, res) => {
     }
 
     if (Array.isArray(mcqAnswers)) attempt.mcqAnswers = mcqAnswers;
-    if (Array.isArray(codingSubmissions)) attempt.codingSubmissions = codingSubmissions;
-    attempt.status = 'submitted';
+    if (Array.isArray(codingSubmissions)) attempt.codingSubmissions = codingSubmissions.slice(0, CODING_PROBLEM_COUNT);
     attempt.submittedAt = new Date();
+
+    if (proctoringDisqualification === true) {
+      attempt.status = 'disqualified';
+      attempt.testScore = null;
+      attempt.mcqScore = null;
+      attempt.codingScore = null;
+      attempt.evaluationSummary = null;
+      attempt.evaluatedAt = null;
+      attempt.mcqBreakdown = [];
+      attempt.codingBreakdown = [];
+      await attempt.save();
+      await TestInvitation.updateOne({ _id: attempt.testInvitation._id }, { status: 'disqualified' });
+      return res.json({
+        success: true,
+        status: 'disqualified',
+        disqualified: true,
+        submittedAt: attempt.submittedAt,
+      });
+    }
+
+    attempt.status = 'submitted';
     await attempt.save();
 
     const evaluateTestAttempt = require('../controllers/llmController').evaluateTestAttempt;

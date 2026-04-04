@@ -37,6 +37,20 @@ const testAttemptSchema = new mongoose.Schema({
   codingScore: { type: Number, default: null },     // 0-70
   evaluationSummary: { type: String, default: null },
   evaluatedAt: { type: Date, default: null },
+  /** Per MCQ (1 mark each, max 30); filled on evaluation or computable from answers */
+  mcqBreakdown: [{
+    orderIndex: Number,
+    marksObtained: Number,
+    marksMax: { type: Number, default: 1 },
+    questionPreview: { type: String, default: '' },
+  }],
+  /** Per coding problem (variable caps per problem, max 70 total); filled when LLM returns scores */
+  codingBreakdown: [{
+    questionIndex: Number,
+    title: { type: String, default: '' },
+    marksObtained: Number,
+    marksMax: { type: Number, default: 23 },
+  }],
 }, {
   timestamps: true,
 });

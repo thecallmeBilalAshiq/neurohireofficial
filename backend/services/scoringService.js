@@ -4,7 +4,7 @@ let sdk, model;
 
 try {
   const key = process.env.BYTEZ_API_KEY;
-  const modelId = process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it';
+  const modelId = process.env.BYTEZ_MODEL || 'openai/gpt-4o';
   if (key) {
     sdk = new Bytez(key);
     model = sdk.model(modelId);

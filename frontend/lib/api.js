@@ -848,6 +848,147 @@ export const prepareTestQuestions = async (jobId, idToken) => {
   }
 };
 
+// CV-only ranked list (hire pipeline)
+export const getCvRankedCandidates = async (jobId, idToken) => {
+  try {
+    const response = await api.get(`/hire-pipeline/cv-ranked/${jobId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch candidates',
+    };
+  }
+};
+
+export const getJobTestContent = async (jobId, idToken) => {
+  try {
+    const response = await api.get(`/llm/job-test-content/${jobId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to load test content',
+    };
+  }
+};
+
+export const saveJobTestContent = async (jobId, payload, idToken) => {
+  try {
+    const response = await api.post(`/llm/save-job-test-content/${jobId}`, payload, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to save test',
+    };
+  }
+};
+
+export const regenerateJobTest = async (jobId, payload, idToken) => {
+  try {
+    const response = await api.post(`/llm/regenerate-job-test/${jobId}`, payload, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to regenerate',
+    };
+  }
+};
+
+export const sendTestTop50 = async (jobId, payload, idToken) => {
+  try {
+    const response = await api.post(`/llm/send-test-top50/${jobId}`, payload, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to send invitations',
+    };
+  }
+};
+
+export const getTestParticipants = async (jobId, idToken) => {
+  try {
+    const response = await api.get(`/hire-pipeline/test-participants/${jobId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch',
+    };
+  }
+};
+
+export const getTestParticipantDetail = async (applicationId, idToken) => {
+  try {
+    const response = await api.get(`/hire-pipeline/test-participant/${applicationId}`, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch',
+    };
+  }
+};
+
+export const sendPhysicalInterviewRound = async (jobId, body, idToken) => {
+  try {
+    const response = await api.post(`/hire-pipeline/physical-interview/${jobId}`, body, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to send',
+    };
+  }
+};
+
+export const completeFinalHire = async (jobId, body, idToken) => {
+  try {
+    const response = await api.post(`/hire-pipeline/final-hire/${jobId}`, body, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed',
+    };
+  }
+};
+
+export const getOnboardingHires = async (idToken) => {
+  try {
+    const response = await api.get('/hire-pipeline/onboarding-hires', {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch',
+    };
+  }
+};
+
 // ==========================================
 // Online Test API (public - no auth)
 // ==========================================

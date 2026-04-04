@@ -7,12 +7,12 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
-// Bytez LLM (default: google/gemma-3-1b-it, override with BYTEZ_MODEL)
+// Bytez LLM (default: openai/gpt-4o, override with BYTEZ_MODEL)
 let Bytez, sdk, model;
 try {
   Bytez = require('bytez.js');
   const key = process.env.BYTEZ_API_KEY;
-  const modelId = process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it';
+  const modelId = process.env.BYTEZ_MODEL || 'openai/gpt-4o';
   if (key) {
     sdk = new Bytez(key);
     model = sdk.model(modelId);
@@ -160,7 +160,7 @@ exports.downloadCVTemplate = async (req, res) => {
   }
 };
 
-// Autofill CV using Bytez (default google/gemma-3-1b-it)
+// Autofill CV using Bytez (default openai/gpt-4o)
 exports.autofillCV = [
   verifyToken, 
   (req, res, next) => {
