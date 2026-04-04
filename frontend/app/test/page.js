@@ -33,7 +33,7 @@ const PROCTORING_INSTRUCTIONS = [
     ],
   },
   {
-    title: "Coding section (7 questions, 70 marks)",
+    title: "Coding section (3 medium problems, 70 marks)",
     items: [
       "Full keyboard and mouse access are allowed for typing code and navigating the coding environment.",
     ],
@@ -121,7 +121,7 @@ function TestEntryContent() {
         <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 text-center">
           <h1 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Invalid or expired link</h1>
           <p className="text-slate-600 dark:text-slate-300 mb-4">{error}</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Please use the link sent to you in your invitation email, and ensure you take the test within 1 week.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Please use the link from your invitation email. The test link expires shortly after send (typically within 10 minutes).</p>
         </div>
       </div>
     );
@@ -146,7 +146,7 @@ function TestEntryContent() {
           <h2 className="font-semibold text-amber-800 dark:text-amber-200 mb-2">Test format</h2>
           <ul className="text-sm text-amber-800 dark:text-amber-200/90 space-y-1">
             <li>• 30 MCQs (30 marks) – job/stack related</li>
-            <li>• 7 coding questions (70 marks) – data structures, algorithms, problem solving</li>
+            <li>• 3 coding problems (70 marks) — medium difficulty; one problem at a time with code editor</li>
             <li>• Total time: 2 hours</li>
           </ul>
         </div>

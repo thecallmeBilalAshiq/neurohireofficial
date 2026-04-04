@@ -8,7 +8,7 @@ let Bytez, sdk, model;
 try {
   Bytez = require('bytez.js');
   const key = process.env.BYTEZ_API_KEY;
-  const modelId = process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it';
+  const modelId = process.env.BYTEZ_MODEL || 'openai/gpt-4o';
 
   if (!key) {
     console.error('Warning: BYTEZ_API_KEY not set. LLM functionality will not work.');
@@ -20,7 +20,15 @@ try {
   console.error('LLM functionality will not work until bytez.js is installed.');
 }
 
-const BYTEZ_MODEL_ID_LOWER = (process.env.BYTEZ_MODEL || 'google/gemma-3-1b-it').toLowerCase();
+const BYTEZ_MODEL_ID_LOWER = (process.env.BYTEZ_MODEL || 'openai/gpt-4o').toLowerCase();
+const { CODING_PROBLEM_COUNT, CODING_MARKS_CAPS } = require('../config/assessmentConfig');
+
+/** Test link validity from invite send (`TestInvitation.expiresAt`, `JobPost.assessmentDeadline`). */
+const TEST_INVITE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes (was 1 week)
+
+function formatTestDeadlineForEmail(date) {
+  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+}
 
 /** Bytez returns errors if the model does not support max_completion_tokens (e.g. Gemma). */
 function bytezMaxCompletionOption(maxTokens) {
@@ -436,7 +444,7 @@ exports.sendInterviewEmails = async (req, res) => {
 
     const isOnlineTest = emailType === 'online_test';
     const frontendUrl = (config.frontend && config.frontend.url) || process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
-    const testExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 1 week
+    const testExpiresAt = new Date(Date.now() + TEST_INVITE_WINDOW_MS);
     const invitationMap = {}; // candidate email -> { token, expiresAt } for building email body
 
     if (isOnlineTest && jobId) {
@@ -479,7 +487,7 @@ exports.sendInterviewEmails = async (req, res) => {
         const testLink = `${frontendUrl.replace(/\/$/, '')}/test?token=${token}`;
         personalizedBody = personalizedBody
           .replace(/\[TEST_LINK\]/g, testLink)
-          .replace(/\[TEST_DEADLINE\]/g, expiresAt.toLocaleDateString(undefined, { dateStyle: 'long' }))
+          .replace(/\[TEST_DEADLINE\]/g, formatTestDeadlineForEmail(expiresAt))
           .replace(/\[TEST_DURATION\]/g, '2 hours');
       }
 
@@ -609,19 +617,22 @@ function parseMcqJsonFromLLM(text) {
   return null;
 }
 
-async function generateAndSaveMcqPool(jobId) {
+async function generateAndSaveMcqPool(jobId, hrExtraInstruction = '') {
   const JobPost = require('../models/JobPost');
   const job = await JobPost.findById(jobId);
   if (!job) return { ok: false };
   const skillsStr = (job.skills && job.skills.length) ? job.skills.join(', ') : 'general programming';
   const desc = job.keyResponsibilities || job.generatedDescription || job.description || '';
+  const extra = hrExtraInstruction
+    ? `\n\nAdditional instructions from HR (follow closely):\n${hrExtraInstruction.slice(0, 2000)}\n`
+    : '';
   const prompt = `You are an expert technical interviewer. Generate exactly 100 multiple-choice questions (MCQs) for an online coding/technical test.
 
 Job context:
 - Job title: ${job.jobTitle}
 - Skills/stack: ${skillsStr}
 - Key responsibilities/description: ${desc.slice(0, 1500)}
-
+${extra}
 Requirements:
 - Each question must have exactly 4 options (A, B, C, D).
 - Questions should cover: programming concepts, data structures, algorithms, language-specific knowledge (from the job stack), and problem-solving.
@@ -664,7 +675,7 @@ async function ensureTestQuestionsForJob(jobId) {
     }
   }
   const coding = await CodingQuestion.findOne({ jobPost: jobId });
-  if (!coding || !coding.questions || coding.questions.length < 7) {
+  if (!coding || !coding.questions || coding.questions.length < CODING_PROBLEM_COUNT) {
     try {
       await generateAndSaveCodingQuestions(jobId);
     } catch (e) {
@@ -673,22 +684,25 @@ async function ensureTestQuestionsForJob(jobId) {
   }
 }
 
-async function generateAndSaveCodingQuestions(jobId) {
+async function generateAndSaveCodingQuestions(jobId, hrExtraInstruction = '') {
   const JobPost = require('../models/JobPost');
   const job = await JobPost.findById(jobId);
   if (!job) return { ok: false };
   const skillsStr = (job.skills && job.skills.length) ? job.skills.join(', ') : 'algorithms and data structures';
-  const prompt = `You are an expert competitive programmer. Generate exactly 7 coding problems for an online test (LeetCode/Codeforces style).
+  const extra = hrExtraInstruction
+    ? `\n\nAdditional instructions from HR:\n${hrExtraInstruction.slice(0, 2000)}\n`
+    : '';
+  const prompt = `You are an expert competitive programmer. Generate exactly ${CODING_PROBLEM_COUNT} coding problems for an online test (LeetCode/Codeforces style).
 
 Job: ${job.jobTitle}. Skills: ${skillsStr}.
-
+${extra}
 Rules:
-- Output ONLY a valid JSON array of exactly 7 objects. No markdown, no code fences, no explanation before or after.
+- Output ONLY a valid JSON array of exactly ${CODING_PROBLEM_COUNT} objects. No markdown, no code fences, no explanation before or after.
 - Each object must have these exact keys (all strings): "title", "statement", "inputFormat", "outputFormat", "sampleInput", "sampleOutput", "constraints", "difficulty".
-- "statement" = full problem description. "difficulty" = one of "easy", "medium", "hard".
-- Mix: 2 easy, 3 medium, 2 hard. Test data structures, algorithms, optimization.
+- "statement" = full problem description. Set "difficulty" to "medium" for ALL problems — they must be medium-to-hard (not trivial, require DSA thinking).
+- Cover data structures, algorithms, and problem-solving; avoid trick-only or pure memorization.
 
-Example format for each object: {"title":"Two Sum","statement":"Given an array of integers, return indices of two numbers that add up to target.","inputFormat":"First line: n. Second line: array. Third: target","outputFormat":"Two space-separated indices","sampleInput":"4","sampleOutput":"0 1","constraints":"2 <= n <= 10000","difficulty":"easy"}
+Example format for each object: {"title":"Two Sum","statement":"Given an array of integers, return indices of two numbers that add up to target.","inputFormat":"First line: n. Second line: array. Third: target","outputFormat":"Two space-separated indices","sampleInput":"4","sampleOutput":"0 1","constraints":"2 <= n <= 10000","difficulty":"medium"}
 
 Reply with only the JSON array starting with [ and ending with ].`;
   const result = await runBytez(
@@ -708,7 +722,7 @@ Reply with only the JSON array starting with [ and ending with ].`;
   }
   const questions = arr
     .filter(q => q && (q.title || q.name) && (q.statement || q.description || q.problem || q.body))
-    .slice(0, 7)
+    .slice(0, CODING_PROBLEM_COUNT)
     .map(q => ({
       title: q.title || q.name || 'Coding Problem',
       statement: q.statement || q.description || q.problem || q.body || '',
@@ -719,7 +733,7 @@ Reply with only the JSON array starting with [ and ending with ].`;
       constraints: q.constraints || '',
       difficulty: ['easy', 'medium', 'hard'].includes(q.difficulty) ? q.difficulty : 'medium',
     }));
-  if (questions.length < 7) return { ok: false, count: questions.length };
+  if (questions.length < CODING_PROBLEM_COUNT) return { ok: false, count: questions.length };
   await CodingQuestion.findOneAndUpdate({ jobPost: jobId }, { jobPost: jobId, questions }, { upsert: true, new: true });
   return { ok: true, count: questions.length };
 }
@@ -743,7 +757,7 @@ exports.generateMcqPool = async (req, res) => {
   }
 };
 
-// Generate 7 coding questions for a job (HR/manual trigger)
+// Generate coding questions for a job (HR/manual trigger)
 exports.generateCodingQuestions = async (req, res) => {
   try {
     if (!model) return res.status(503).json({ error: 'LLM service not available.' });
@@ -753,7 +767,7 @@ exports.generateCodingQuestions = async (req, res) => {
     if (!job) return res.status(404).json({ error: 'Job not found' });
     const result = await generateAndSaveCodingQuestions(jobId);
     if (!result.ok) {
-      return res.status(500).json({ error: `LLM generated only ${result.count || 0} coding questions. Need 7.` });
+      return res.status(500).json({ error: `LLM generated only ${result.count || 0} coding questions. Need ${CODING_PROBLEM_COUNT}.` });
     }
     res.json({ success: true, count: result.count });
   } catch (error) {
@@ -779,6 +793,7 @@ exports.evaluateTestAttempt = async (attemptId) => {
   if (!mcqPool || !mcqPool.questions || !codingDoc || !codingDoc.questions) return;
 
   let mcqScore = 0;
+  const mcqBreakdown = [];
   const mcqOrder = attempt.mcqOrder || [];
   const mcqAnswers = attempt.mcqAnswers || [];
   for (let i = 0; i < mcqOrder.length; i++) {
@@ -787,27 +802,39 @@ exports.evaluateTestAttempt = async (attemptId) => {
     if (!q || typeof q.correctIndex !== 'number') continue;
     const ans = mcqAnswers.find((a) => a.questionIndex === i);
     const selected = ans && typeof ans.selectedIndex === 'number' ? ans.selectedIndex : -1;
-    if (selected === q.correctIndex) mcqScore += 1;
+    const correct = selected === q.correctIndex;
+    if (correct) mcqScore += 1;
+    mcqBreakdown.push({
+      orderIndex: i,
+      marksObtained: correct ? 1 : 0,
+      marksMax: 1,
+      questionPreview: String(q.questionText || '').slice(0, 120),
+    });
   }
   const maxMcq = 30;
   mcqScore = Math.min(mcqScore, maxMcq);
 
   let codingScore = 0;
   let evaluationSummary = '';
+  let codingBreakdown = [];
 
   if (model && codingDoc.questions.length > 0 && attempt.codingSubmissions && attempt.codingSubmissions.length > 0) {
     const codingSubs = attempt.codingSubmissions;
-    const parts = codingDoc.questions.slice(0, 7).map((q, i) => {
+    const nProblems = Math.min(CODING_PROBLEM_COUNT, codingDoc.questions.length);
+    const parts = codingDoc.questions.slice(0, nProblems).map((q, i) => {
       const sub = codingSubs[i] || {};
-      return `Problem ${i + 1} (${q.title}):\nStatement: ${(q.statement || '').slice(0, 500)}\nSample I/O: ${q.sampleInput || ''} -> ${q.sampleOutput || ''}\nCandidate code (${sub.language || 'javascript'}):\n${(sub.code || '').slice(0, 2000)}`;
+      return `Problem ${i + 1} (${q.title}):\nStatement: ${(q.statement || '').slice(0, 500)}\nSample I/O: ${q.sampleInput || ''} -> ${q.sampleOutput || ''}\nCandidate code (${sub.language || 'javascript'}):\n${(sub.code || '').slice(0, 4000)}`;
     }).join('\n\n---\n\n');
 
-    const prompt = `You are grading a coding test. The test has 7 problems. Score the candidate's solutions.
+    const caps = CODING_MARKS_CAPS.slice(0, nProblems);
+    const capsStr = caps.map((c, i) => `problem ${i + 1} max ${c}`).join(', ');
+
+    const prompt = `You are grading a coding test. The test has ${nProblems} problems. Score the candidate's solutions.
 
 ${parts}
 
-Score each of the 7 solutions from 0 to 10 (0=wrong/empty, 10=excellent). Consider: correctness of logic, code quality, handling edge cases.
-Reply with ONLY a JSON object (no markdown): { "scores": [n1, n2, n3, n4, n5, n6, n7], "totalCodingScore": number (sum of scores, max 70), "feedback": "one short paragraph" }`;
+Score each solution: ${capsStr} (total max 70). Use 0 if empty or nonsensical. Consider correctness, code quality, edge cases.
+Reply with ONLY a JSON object (no markdown): { "scores": [s1, s2, s3], "totalCodingScore": number (sum, max 70), "feedback": "one short paragraph" }`;
 
     try {
       const result = await runBytez(
@@ -822,10 +849,30 @@ Reply with ONLY a JSON object (no markdown): { "scores": [n1, n2, n3, n4, n5, n6
         const obj = JSON.parse(objMatch[0]);
         const scores = obj.scores;
         if (Array.isArray(scores)) {
-          const sum = scores.reduce((a, b) => a + (Number(b) || 0), 0);
-          codingScore = Math.min(70, Math.max(0, Math.round(sum)));
+          codingBreakdown = [];
+          for (let i = 0; i < nProblems; i++) {
+            const cap = CODING_MARKS_CAPS[i] ?? 23;
+            const cq = codingDoc.questions[i];
+            const obtained = Math.min(cap, Math.max(0, Math.round(Number(scores[i]) || 0)));
+            codingBreakdown.push({
+              questionIndex: i,
+              title: String(cq?.title || `Problem ${i + 1}`).slice(0, 120),
+              marksObtained: obtained,
+              marksMax: cap,
+            });
+          }
+          codingScore = Math.min(70, codingBreakdown.reduce((s, r) => s + (r.marksObtained || 0), 0));
         } else if (typeof obj.totalCodingScore === 'number') {
           codingScore = Math.min(70, Math.max(0, Math.round(obj.totalCodingScore)));
+          for (let i = 0; i < nProblems; i++) {
+            const cq = codingDoc.questions[i];
+            codingBreakdown.push({
+              questionIndex: i,
+              title: String(cq?.title || `Problem ${i + 1}`).slice(0, 120),
+              marksObtained: null,
+              marksMax: CODING_MARKS_CAPS[i] ?? 23,
+            });
+          }
         }
         if (typeof obj.feedback === 'string') evaluationSummary = obj.feedback.slice(0, 500);
       }
@@ -844,6 +891,8 @@ Reply with ONLY a JSON object (no markdown): { "scores": [n1, n2, n3, n4, n5, n6
       testScore: totalScore,
       evaluationSummary: evaluationSummary || null,
       evaluatedAt: new Date(),
+      mcqBreakdown,
+      codingBreakdown,
     }
   );
 };
@@ -883,5 +932,288 @@ Use plain text with clear headings. Keep each section concise but actionable. No
   } catch (e) {
     console.error('Training plan LLM error:', e);
     return null;
+  }
+};
+
+// ----- HR test editor, top-50 invites, condolence (hire pipeline) -----
+const { dispatchEmailBatch } = require('../services/emailDispatchService');
+const appConfig = require('../config/appConfig');
+
+function validateMcqList(arr) {
+  if (!Array.isArray(arr) || arr.length < 30) return false;
+  return arr.every(
+    (q) =>
+      q &&
+      typeof q.questionText === 'string' &&
+      Array.isArray(q.options) &&
+      q.options.length === 4 &&
+      typeof q.correctIndex === 'number' &&
+      q.correctIndex >= 0 &&
+      q.correctIndex <= 3
+  );
+}
+
+function validateCodingList(arr) {
+  if (!Array.isArray(arr) || arr.length < CODING_PROBLEM_COUNT) return false;
+  return arr.every(
+    (q) =>
+      q &&
+      typeof (q.title || q.name) === 'string' &&
+      (q.statement || q.description || q.problem || q.body)
+  );
+}
+
+/** GET test pools for HR editing (must own job). req.user set by middleware. */
+exports.getJobTestContent = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const JobPost = require('../models/JobPost');
+    const job = await JobPost.findOne({ _id: jobId, createdBy: req.user._id });
+    if (!job) return res.status(404).json({ error: 'Job post not found' });
+    const pool = await TestMcqPool.findOne({ jobPost: jobId }).lean();
+    const coding = await CodingQuestion.findOne({ jobPost: jobId }).lean();
+    res.json({
+      success: true,
+      jobTitle: job.jobTitle,
+      company: job.company,
+      mcqQuestions: pool?.questions || [],
+      codingQuestions: coding?.questions || [],
+      hirePipelineStage: job.hirePipelineStage,
+      assessmentInviteSentAt: job.assessmentInviteSentAt,
+      testContentFinalizedAt: job.testContentFinalizedAt,
+    });
+  } catch (e) {
+    console.error('getJobTestContent:', e);
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+};
+
+/** Save HR-edited MCQ + coding; marks test ready. */
+exports.saveJobTestContent = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { mcqQuestions, codingQuestions } = req.body;
+    const JobPost = require('../models/JobPost');
+    const job = await JobPost.findOne({ _id: jobId, createdBy: req.user._id });
+    if (!job) return res.status(404).json({ error: 'Job post not found' });
+    if (job.assessmentInviteSentAt) {
+      return res.status(400).json({ error: 'Test invitations already sent; content is locked.' });
+    }
+    if (!validateMcqList(mcqQuestions)) {
+      return res.status(400).json({ error: 'MCQs: need at least 30 valid items (4 options each, correctIndex 0-3).' });
+    }
+    if (!validateCodingList(codingQuestions)) {
+      return res.status(400).json({ error: `Coding: need at least ${CODING_PROBLEM_COUNT} valid problems with title and statement.` });
+    }
+    const normalizedMcq = mcqQuestions.slice(0, 100).map((q) => ({
+      questionText: String(q.questionText),
+      options: q.options.map(String),
+      correctIndex: q.correctIndex,
+    }));
+    const normalizedCoding = codingQuestions.slice(0, CODING_PROBLEM_COUNT).map((q) => ({
+      title: q.title || q.name || 'Problem',
+      statement: q.statement || q.description || q.problem || q.body || '',
+      inputFormat: q.inputFormat || q.input_format || '',
+      outputFormat: q.outputFormat || q.output_format || '',
+      sampleInput: q.sampleInput || q.sample_input || '',
+      sampleOutput: q.sampleOutput || q.sample_output || '',
+      constraints: q.constraints || '',
+      difficulty: ['easy', 'medium', 'hard'].includes(q.difficulty) ? q.difficulty : 'medium',
+    }));
+    await TestMcqPool.findOneAndUpdate(
+      { jobPost: jobId },
+      { jobPost: jobId, questions: normalizedMcq },
+      { upsert: true, new: true }
+    );
+    await CodingQuestion.findOneAndUpdate(
+      { jobPost: jobId },
+      { jobPost: jobId, questions: normalizedCoding },
+      { upsert: true, new: true }
+    );
+    job.testContentFinalizedAt = new Date();
+    job.hirePipelineStage = 'test_ready';
+    await job.save();
+    res.json({ success: true, message: 'Test content saved.' });
+  } catch (e) {
+    console.error('saveJobTestContent:', e);
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+};
+
+/** Regenerate MCQ and/or coding using HR instructions (LLM). */
+exports.regenerateJobTestWithInstruction = async (req, res) => {
+  try {
+    if (!model) {
+      return res.status(503).json({ error: 'LLM service not available.' });
+    }
+    const { jobId } = req.params;
+    const { instruction, scope = 'both' } = req.body;
+    const JobPost = require('../models/JobPost');
+    const job = await JobPost.findOne({ _id: jobId, createdBy: req.user._id });
+    if (!job) return res.status(404).json({ error: 'Job post not found' });
+    if (job.assessmentInviteSentAt) {
+      return res.status(400).json({ error: 'Invitations already sent.' });
+    }
+    const instr = (instruction && String(instruction).trim()) || 'Improve relevance and clarity for this role.';
+    if (scope === 'mcq' || scope === 'both') {
+      const r = await generateAndSaveMcqPool(jobId, instr);
+      if (!r.ok) return res.status(500).json({ error: `MCQ regeneration failed (got ${r.count || 0} questions).` });
+    }
+    if (scope === 'coding' || scope === 'both') {
+      const r = await generateAndSaveCodingQuestions(jobId, instr);
+      if (!r.ok) return res.status(500).json({ error: `Coding regeneration failed (got ${r.count || 0} problems).` });
+    }
+    const pool = await TestMcqPool.findOne({ jobPost: jobId }).lean();
+    const coding = await CodingQuestion.findOne({ jobPost: jobId }).lean();
+    res.json({
+      success: true,
+      mcqQuestions: pool?.questions || [],
+      codingQuestions: coding?.questions || [],
+    });
+  } catch (e) {
+    console.error('regenerateJobTestWithInstruction:', e);
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+};
+
+const TOP_N_TEST = 50;
+
+/** Create invitations for top 50 by CV total score, send test emails + condolence to remaining evaluated candidates. */
+exports.sendTestInvitesTop50 = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { emailContent, hrInfo, jobInfo } = req.body;
+    const JobPost = require('../models/JobPost');
+    const Application = require('../models/Application');
+    const TestInvitation = require('../models/TestInvitation');
+    const job = await JobPost.findOne({ _id: jobId, createdBy: req.user._id });
+    if (!job) return res.status(404).json({ error: 'Job post not found' });
+    if (!job.evaluatedAt) {
+      return res.status(400).json({ error: 'Evaluate applications first.' });
+    }
+    if (job.assessmentInviteSentAt) {
+      return res.status(400).json({ error: 'Test invitations were already sent for this job.' });
+    }
+    if (!emailContent?.subject || !emailContent?.body) {
+      return res.status(400).json({ error: 'emailContent.subject and emailContent.body required' });
+    }
+    try {
+      await ensureTestQuestionsForJob(jobId);
+    } catch (e) {
+      console.error('ensureTestQuestionsForJob:', e);
+      return res.status(503).json({ error: 'Test questions not ready. Save or generate test content first.' });
+    }
+    const pool = await TestMcqPool.findOne({ jobPost: jobId });
+    const coding = await CodingQuestion.findOne({ jobPost: jobId });
+    if (!pool?.questions?.length || pool.questions.length < 30 || !coding?.questions?.length || coding.questions.length < CODING_PROBLEM_COUNT) {
+      return res.status(400).json({ error: `Finalize test content (MCQ ≥30, coding ≥${CODING_PROBLEM_COUNT}) before sending invites.` });
+    }
+
+    const allRanked = await Application.find({ jobPost: jobId, rankedAt: { $ne: null } })
+      .populate('candidate', '_id name email')
+      .sort({ 'scores.total': -1, createdAt: 1 })
+      .lean();
+
+    if (!allRanked.length) {
+      return res.status(400).json({ error: 'No ranked applications for this job.' });
+    }
+
+    const top = allRanked.slice(0, TOP_N_TEST);
+    const topIds = new Set(top.map((a) => a._id.toString()));
+    const rest = allRanked.filter((a) => !topIds.has(a._id.toString()));
+
+    const frontendUrl = (appConfig.frontend && appConfig.frontend.url) || process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000';
+    const testExpiresAt = new Date(Date.now() + TEST_INVITE_WINDOW_MS);
+    const invitationMap = {};
+
+    for (const app of top) {
+      if (!app.candidate?._id) continue;
+      const inv = new TestInvitation({
+        jobPost: jobId,
+        application: app._id,
+        candidate: app.candidate._id,
+        expiresAt: testExpiresAt,
+      });
+      await inv.save();
+      const email = app.candidate.email || app.formData?.email;
+      if (email) invitationMap[email] = { token: inv.token, expiresAt: testExpiresAt };
+    }
+
+    const jInfo = jobInfo || { jobTitle: job.jobTitle, company: job.company };
+
+    const testEmails = top
+      .map((app) => {
+        const email = app.candidate?.email || app.formData?.email;
+        if (!email || !invitationMap[email]) return null;
+        const name = app.candidate?.name || `${app.formData?.firstName || ''} ${app.formData?.lastName || ''}`.trim() || 'Candidate';
+        const { token, expiresAt } = invitationMap[email];
+        const testLink = `${frontendUrl.replace(/\/$/, '')}/test?token=${token}`;
+        let body = emailContent.body
+          .replace(/\[CANDIDATE_NAME\]/g, name)
+          .replace(/\[HR_NAME\]/g, hrInfo?.name || 'HR Team')
+          .replace(/\[HR_TITLE\]/g, hrInfo?.title || 'Human Resources')
+          .replace(/\[COMPANY_NAME\]/g, jInfo.company || job.company || 'Our Company')
+          .replace(/\[COMPANY_EMAIL\]/g, hrInfo?.email || 'hr@company.com')
+          .replace(/\[COMPANY_PHONE\]/g, hrInfo?.phone || '')
+          .replace(/\[TEST_LINK\]/g, testLink)
+          .replace(/\[TEST_DEADLINE\]/g, formatTestDeadlineForEmail(expiresAt))
+          .replace(/\[TEST_DURATION\]/g, '2 hours');
+        let subject = emailContent.subject.replace(/\[CANDIDATE_NAME\]/g, name);
+        return {
+          to: email,
+          subject,
+          body,
+          candidateName: name,
+          jobTitle: jInfo.jobTitle,
+          company: jInfo.company,
+        };
+      })
+      .filter(Boolean);
+
+    const condolenceSubject = `Update on your application — ${jInfo.jobTitle || 'position'}`;
+    const condolenceBodies = rest
+      .map((app) => {
+        const email = app.candidate?.email || app.formData?.email;
+        if (!email) return null;
+        const name = app.candidate?.name || `${app.formData?.firstName || ''} ${app.formData?.lastName || ''}`.trim() || 'Candidate';
+        const body =
+          `Dear ${name},\n\n` +
+          `Thank you for your interest in the ${jInfo.jobTitle || 'role'} position at ${jInfo.company || 'our company'} and for the time you invested in your application.\n\n` +
+          `After careful review, we will not be moving forward with your application at this stage. This decision is specific to the current opening and does not define your potential.\n\n` +
+          `We genuinely encourage you to apply again for future roles that match your profile. Many strong candidates cross paths with us more than once.\n\n` +
+          `Wishing you every success in your search.\n\n` +
+          `Warm regards,\n${hrInfo?.name || 'The Hiring Team'}\n${jInfo.company || ''}`;
+        return { to: email, subject: condolenceSubject, body, candidateName: name, jobTitle: jInfo.jobTitle, company: jInfo.company };
+      })
+      .filter(Boolean);
+
+    await dispatchEmailBatch(testEmails, jInfo);
+    if (condolenceBodies.length) {
+      await dispatchEmailBatch(condolenceBodies, { ...jInfo, type: 'condolence_not_shortlisted' });
+    }
+
+    const now = new Date();
+    await Application.updateMany(
+      { _id: { $in: rest.map((a) => a._id) } },
+      { $set: { condolenceNotShortlistedForTestSentAt: now } }
+    );
+
+    job.assessmentInviteSentAt = now;
+    job.assessmentDeadline = testExpiresAt;
+    job.hirePipelineStage = 'test_sent';
+    await job.save();
+
+    res.json({
+      success: true,
+      sentTestCount: testEmails.length,
+      sentCondolenceCount: condolenceBodies.length,
+      assessmentDeadline: testExpiresAt,
+    });
+  } catch (e) {
+    console.error('sendTestInvitesTop50:', e);
+    if (e.code === 'ECONNREFUSED') {
+      return res.status(503).json({ error: 'Email service (n8n) unavailable.', details: e.message });
+    }
+    res.status(500).json({ error: e.message || 'Failed to send' });
   }
 };

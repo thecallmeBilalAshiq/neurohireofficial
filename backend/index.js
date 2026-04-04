@@ -13,6 +13,7 @@ const applicationRoutes = require('./routes/applications');
 const cvRoutes = require('./routes/cv');
 const testRoutes = require('./routes/test');
 const contactRoutes = require('./routes/contact');
+const hirePipelineRoutes = require('./routes/hirePipeline');
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ app.use('/api/applications', applicationRoutes);
 app.use('/api/cv', cvRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/hire-pipeline', hirePipelineRoutes);
 
 
 // Health check endpoint

@@ -52,6 +52,8 @@ export default forwardRef(function Proctoring(
     onMaxViolations,
     disabled = false,
     mcqMode = false,
+    /** When false, camera/models still load but detectForVideo is not run (warm-up period). */
+    enableDetection = true,
   },
   ref
 ) {
@@ -192,7 +194,7 @@ export default forwardRef(function Proctoring(
 
   // Detection loop: face count, face bounds, eyes in frame, forbidden objects
   useEffect(() => {
-    if (disabled || !faceDetectorRef.current || !videoRef.current) return;
+    if (disabled || !enableDetection || !faceDetectorRef.current || !videoRef.current) return;
 
     const video = videoRef.current;
     // Single monotonically increasing timestamp per frame (ms). Some delegates require strictly increasing timestamps.
@@ -328,7 +330,7 @@ export default forwardRef(function Proctoring(
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [disabled, detectorReady, notifyFaceStatus, recordViolation]);
+  }, [disabled, enableDetection, detectorReady, notifyFaceStatus, recordViolation]);
 
   if (disabled) return null;
 

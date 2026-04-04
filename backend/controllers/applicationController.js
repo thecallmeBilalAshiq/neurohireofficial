@@ -618,7 +618,9 @@ exports.getJobsForRanking = [verifyToken, async (req, res) => {
       createdBy: req.user._id,
       remarks: { $ne: 'deleted' }
     })
-      .select('jobTitle company _id deadline evaluatedAt remarks')
+      .select(
+        'jobTitle company _id deadline evaluatedAt remarks hirePipelineStage assessmentInviteSentAt assessmentDeadline awaitingFinalHireSelection finalHireCompletedAt noHireSelected testContentFinalizedAt'
+      )
       .sort({ createdAt: -1 });
 
     res.json(jobs);

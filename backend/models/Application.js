@@ -60,6 +60,16 @@ const applicationSchema = new mongoose.Schema({
   interviewInviteSentAt: { type: Date, default: null },
   selectedAsHire: { type: Boolean, default: false },
   trainingPlanPdfPath: { type: String, default: null },
+  /** Condolence: not in CV top-50 when test invites sent */
+  condolenceNotShortlistedForTestSentAt: { type: Date, default: null },
+  /** Invited to on-site / video interview after online test */
+  physicalInterviewInvitedAt: { type: Date, default: null },
+  /** Condolence: had test but not selected for physical interview round */
+  condolenceAfterPhysicalSentAt: { type: Date, default: null },
+  /** Congratulations email when marked final hire */
+  congratulationsHireSentAt: { type: Date, default: null },
+  /** Condolence: attended physical round but not chosen as hire */
+  condolenceNotFinalHireSentAt: { type: Date, default: null },
 }, {
   timestamps: true,
 });

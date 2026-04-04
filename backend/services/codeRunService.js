@@ -4,8 +4,9 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-const PISTON_URL = process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston';
-const RUN_TIMEOUT_MS = 10000;
+/** Public Piston: https://github.com/engineer-man/piston — or self-host and set PISTON_API_URL */
+const PISTON_URL = (process.env.PISTON_API_URL || 'https://emkc.org/api/v2/piston').replace(/\/$/, '');
+const RUN_TIMEOUT_MS = 12000;
 const MAX_CODE_LENGTH = 50000;
 const MAX_STDIN_LENGTH = 10000;
 
@@ -19,10 +20,22 @@ const LANGUAGE_MAP = {
   c: 'c',
 };
 
-/**
- * Run JavaScript in Node subprocess. Fallback when Piston is unavailable.
- * Writes user code to a temp file and runs it with node; stdin is piped.
- */
+function pistonFileFor(lang) {
+  switch (lang) {
+    case 'python':
+      return { name: 'main.py', language: 'python' };
+    case 'java':
+      return { name: 'Main.java', language: 'java' };
+    case 'cpp':
+      return { name: 'main.cpp', language: 'cpp' };
+    case 'c':
+      return { name: 'main.c', language: 'c' };
+    case 'javascript':
+    default:
+      return { name: 'main.js', language: 'javascript' };
+  }
+}
+
 function runJavaScriptNode(code, stdin) {
   return new Promise((resolve) => {
     const tmpDir = os.tmpdir();
@@ -33,34 +46,35 @@ function runJavaScriptNode(code, stdin) {
     });
     let stdout = '';
     let stderr = '';
+    let finished = false;
+    const done = (payload) => {
+      if (finished) return;
+      finished = true;
+      try { fs.unlinkSync(filePath); } catch (_) {}
+      resolve(payload);
+    };
     child.stdout.on('data', (d) => { stdout += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('error', (err) => {
-      try { fs.unlinkSync(filePath); } catch (_) {}
-      resolve({ stdout: '', stderr: err.message || 'Failed to run', exitCode: -1 });
+      done({ stdout: '', stderr: err.message || 'Failed to run', exitCode: -1 });
     });
     child.on('close', (code, signal) => {
-      try { fs.unlinkSync(filePath); } catch (_) {}
-      resolve({ stdout, stderr, exitCode: code ?? (signal ? -1 : 0) });
+      done({ stdout, stderr, exitCode: code ?? (signal ? -1 : 0) });
     });
     child.stdin.write(stdin);
     child.stdin.end();
     setTimeout(() => {
       try { child.kill('SIGKILL'); } catch (_) {}
-      try { fs.unlinkSync(filePath); } catch (_) {}
-      if (stdout === '' && stderr === '' && child.exitCode == null) {
-        resolve({ stdout: '', stderr: 'Execution timed out (10s)', exitCode: -1 });
+      if (!finished) {
+        done({ stdout, stderr: stderr || 'Execution timed out (12s)', exitCode: -1 });
       }
     }, RUN_TIMEOUT_MS);
   });
 }
 
 /**
- * Execute code via Piston public API, or Node fallback for JavaScript.
- * @param {string} language - e.g. 'javascript', 'python'
- * @param {string} code - source code
- * @param {string} stdin - optional stdin
- * @returns {{ stdout: string, stderr: string, exitCode: number, error?: string }}
+ * Execute code via Piston API, or Node subprocess for JavaScript if Piston fails.
+ * @param {string} language - javascript, python, java, cpp, c
  */
 async function runCode(language, code, stdin = '') {
   if (!code || typeof code !== 'string') {
@@ -80,13 +94,15 @@ async function runCode(language, code, stdin = '') {
     if (nodeResult.exitCode >= 0) return nodeResult;
   }
 
+  const { name, language: pistonLang } = pistonFileFor(lang);
+
   try {
     const response = await axios.post(
       `${PISTON_URL}/execute`,
       {
-        language: lang,
+        language: pistonLang,
         version: '*',
-        files: [{ name: lang === 'python' ? 'main.py' : 'main.js', content: code }],
+        files: [{ name, content: code }],
         stdin: String(stdin),
       },
       { timeout: RUN_TIMEOUT_MS }

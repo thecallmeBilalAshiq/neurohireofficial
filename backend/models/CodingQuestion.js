@@ -18,7 +18,7 @@ const codingQuestionSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  questions: [codingQuestionItemSchema], // 7 questions
+  questions: [codingQuestionItemSchema], // typically 3 problems (70 marks total)
   generatedAt: { type: Date, default: Date.now },
 }, {
   timestamps: true,

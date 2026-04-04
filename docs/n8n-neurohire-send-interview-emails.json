@@ -1,0 +1,90 @@
+{
+  "name": "NeuroHire - Send Interview Emails",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-interview-emails",
+        "responseMode": "onReceived",
+        "options": {
+          "responseData": "{\"success\":true,\"message\":\"Emails queued\"}"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-240, 0],
+      "id": "120519a0-b960-4959-8c96-9ccc947a2fa1",
+      "name": "Webhook",
+      "webhookId": "bffa864e-91f4-4a24-a176-d52b39ecd3cd"
+    },
+    {
+      "parameters": {
+        "language": "javaScript",
+        "mode": "runOnceForAllItems",
+        "jsCode": "// NeuroHire POST body is { emails, totalCount, jobInfo, sentAt }.\n// n8n Webhook puts that object on item.json.body (not at root).\nconst item = items[0];\nconst root = item?.json ?? {};\nconst body = root.body ?? root;\nconst list = body.emails;\nif (!Array.isArray(list) || list.length === 0) {\n  throw new Error('No emails[] in webhook body. Expected JSON: { emails: [{ to, subject, body }, ...] } under request body.');\n}\nreturn list.map((e) => ({ json: e }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [80, 0],
+      "id": "normalize-emails-from-body",
+      "name": "Normalize emails from body"
+    },
+    {
+      "parameters": {
+        "fromEmail": "faieztariq67@gmail.com",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [400, 0],
+      "id": "d06b74e8-0307-44b4-b6ef-420251d0dc8f",
+      "name": "Send email",
+      "credentials": {
+        "smtp": {
+          "id": "4qkLhTai6clOw4Xr",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize emails from body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize emails from body": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send email": {
+      "main": [[]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
