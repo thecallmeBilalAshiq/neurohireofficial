@@ -117,6 +117,7 @@ exports.getTestParticipants = asHandlers(async (req, res) => {
         physicalInterviewDate: jobPost.physicalInterviewDate,
         physicalInterviewTime: jobPost.physicalInterviewTime,
         physicalInterviewLocation: jobPost.physicalInterviewLocation,
+        closureReason: jobPost.closureReason || '',
         candidates: [],
       });
     }
@@ -173,6 +174,7 @@ exports.getTestParticipants = asHandlers(async (req, res) => {
       physicalInterviewDate: jobPost.physicalInterviewDate,
       physicalInterviewTime: jobPost.physicalInterviewTime,
       physicalInterviewLocation: jobPost.physicalInterviewLocation,
+      closureReason: jobPost.closureReason || '',
       candidates: list,
     });
   } catch (e) {
@@ -443,6 +445,7 @@ exports.completeFinalHire = asHandlers(async (req, res) => {
       job.finalHireCompletedAt = completedAt;
       job.hirePipelineStage = 'finished';
       job.remarks = 'completed';
+      job.closureReason = '';
       await job.save();
 
       const emails = physicalApps
@@ -548,6 +551,7 @@ exports.completeFinalHire = asHandlers(async (req, res) => {
     job.hirePipelineStage = 'finished';
     job.remarks = 'completed';
     job.noHireSelected = false;
+    job.closureReason = '';
     await job.save();
 
     res.json({ success: true, hiredCount: congrats.length });
@@ -591,6 +595,81 @@ exports.getOnboardingHires = asHandlers(async (req, res) => {
     res.json({ hires: rows });
   } catch (e) {
     console.error('getOnboardingHires:', e);
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
+/** Close job when there are no test participants OR all invited candidates were disqualified — no one eligible to shortlist. */
+exports.closeJobNoEligibleCandidates = asHandlers(async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await JobPost.findOne({ _id: jobId, createdBy: req.user._id });
+    if (!job) return res.status(404).json({ error: 'Job post not found' });
+    if (job.finalHireCompletedAt || job.hirePipelineStage === 'finished') {
+      return res.status(400).json({ error: 'This job is already closed.' });
+    }
+    if (!job.assessmentInviteSentAt) {
+      return res.status(400).json({ error: 'Send the online assessment first before using this closure.' });
+    }
+    const now = new Date();
+    if (job.assessmentDeadline && now < new Date(job.assessmentDeadline)) {
+      return res.status(400).json({
+        error: 'Assessment deadline has not passed yet. Wait until the test window ends.',
+      });
+    }
+    if (job.physicalInterviewEmailSentAt) {
+      return res.status(400).json({
+        error: 'Physical interview round already sent. Use final hiring decision or no-hire to close.',
+      });
+    }
+
+    const invitations = await TestInvitation.find({ jobPost: jobId }).lean();
+    const appIds = invitations.map((i) => i.application);
+
+    let allowClose = false;
+    if (appIds.length === 0) {
+      allowClose = true;
+    } else {
+      const invIds = invitations.map((i) => i._id);
+      const attempts = await TestAttempt.find({ testInvitation: { $in: invIds } })
+        .select('testInvitation status')
+        .lean();
+      const disqInvIds = new Set(
+        attempts.filter((a) => a.status === 'disqualified').map((a) => a.testInvitation.toString())
+      );
+      const disqualifiedAppIdSet = new Set();
+      invitations.forEach((inv) => {
+        if (disqInvIds.has(inv._id.toString())) disqualifiedAppIdSet.add(inv.application.toString());
+      });
+      const applications = await Application.find({ _id: { $in: appIds } }).select('_id').lean();
+      const allDisqualified =
+        applications.length > 0 &&
+        applications.every((a) => disqualifiedAppIdSet.has(a._id.toString()));
+      allowClose = allDisqualified;
+    }
+
+    if (!allowClose) {
+      return res.status(400).json({
+        error:
+          'Only available when there are no test participants, or every participant was disqualified (e.g. proctoring).',
+      });
+    }
+
+    job.hirePipelineStage = 'finished';
+    job.finalHireCompletedAt = now;
+    job.awaitingFinalHireSelection = false;
+    job.noHireSelected = true;
+    job.remarks = 'completed';
+    job.closureReason = 'no_eligible_pool';
+    await job.save();
+
+    res.json({
+      success: true,
+      message:
+        'We are sorry — no candidate was up to the mark for this role. The job has been closed.',
+    });
+  } catch (e) {
+    console.error('closeJobNoEligibleCandidates:', e);
     res.status(500).json({ error: e.message || 'Failed' });
   }
 });

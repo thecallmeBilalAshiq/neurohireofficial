@@ -54,6 +54,8 @@ export default forwardRef(function Proctoring(
     mcqMode = false,
     /** When false, camera/models still load but detectForVideo is not run (warm-up period). */
     enableDetection = true,
+    /** Coding section: dock camera under header so it does not cover editor controls. */
+    compactTop = false,
   },
   ref
 ) {
@@ -335,7 +337,13 @@ export default forwardRef(function Proctoring(
   if (disabled) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+    <div
+      className={
+        compactTop
+          ? "fixed top-14 right-2 sm:right-4 z-50 flex flex-col items-end gap-1.5 max-w-[10.5rem]"
+          : "fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2"
+      }
+    >
       {cameraError && (
         <div className="bg-red-600 text-white px-3 py-2 rounded-lg shadow text-sm">
           {cameraError}
@@ -346,10 +354,10 @@ export default forwardRef(function Proctoring(
           ref={videoRef}
           muted
           playsInline
-          className="w-48 h-36 object-cover block"
+          className={compactTop ? "w-36 h-28 sm:w-40 sm:h-32 object-cover block" : "w-48 h-36 object-cover block"}
           style={{ transform: "scaleX(-1)" }}
         />
-        <div className="px-2 py-1 text-xs text-slate-300 space-y-0.5">
+        <div className={`px-2 py-1 text-[10px] sm:text-xs text-slate-300 space-y-0.5 ${compactTop ? "leading-tight" : ""}`}>
           <div>
             {faceDetected
               ? singleFace

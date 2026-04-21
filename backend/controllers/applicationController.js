@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const { scoreCandidate } = require('../services/scoringService');
 const { generateTrainingPlanContent } = require('./llmController');
+const { candidateOpenForApplicationsFilter } = require('../utils/jobCandidateVisibility');
 let PDFDocument;
 try { PDFDocument = require('pdfkit'); } catch (_) {}
 
@@ -42,15 +43,9 @@ const verifyToken = async (req, res, next) => {
 // Get all active jobs for candidates (no HR restriction)
 exports.getActiveJobsForCandidates = [verifyToken, async (req, res) => {
   try {
-    // Treat deadline as a DATE (from the HR UI we only capture yyyy-MM-dd),
-    // so a job with today's deadline is visible for the whole day.
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const jobPosts = await JobPost.find({ 
-      activeStatus: true,
-      deadline: { $gte: todayStart },
-      remarks: { $ne: 'deleted' }
+    // Deadline + closed-hiring rules: see candidateOpenForApplicationsFilter()
+    const jobPosts = await JobPost.find({
+      ...candidateOpenForApplicationsFilter(),
     })
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
@@ -117,15 +112,16 @@ exports.submitApplication = async (req, res) => {
       return res.status(400).json({ error: 'Job ID is required' });
     }
 
-    // Check if job exists and is active
+    // Check if job exists and still accepts new applications (not closed / hiring finished)
     const jobPost = await JobPost.findOne({
       _id: jobId,
-      activeStatus: true,
-      deadline: { $gte: new Date() }
+      ...candidateOpenForApplicationsFilter(),
     });
 
     if (!jobPost) {
-      return res.status(404).json({ error: 'Job not found or deadline has passed' });
+      return res.status(404).json({
+        error: 'Job not found, deadline has passed, or this position is closed and no longer accepting applications.',
+      });
     }
 
     // Ensure jobPost has all required fields with defaults
