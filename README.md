@@ -1,7 +1,5 @@
 <img align="left" src="https://user-images.githubusercontent.com/65187002/144930161-2f783401-8d27-4fdf-a2f7-cc0ba32f1f1f.gif" width="30%" style="display:inline;"><img align="right" src="https://user-images.githubusercontent.com/65187002/144930161-2f783401-8d27-4fdf-a2f7-cc0ba32f1f1f.gif" width="30%" style="display:inline;">
 
-
-
 <p align="center">
     <h1 align="center">✩&emsp;NeuroHire Official&emsp;✩</h1>
 </p>
@@ -16,9 +14,7 @@
   <img src="https://github.com/thecallmebilalashiq/thecallmebilalashiq/blob/main/assets/header.gif" alt="Animated Header" />
 </div   
 
-
 <hr>
-
 
 ![Artificial Intelligence](https://img.shields.io/badge/-Artificial%20Intelligence-065535?style=for-the-badge&logo=openai&logoColor=white)
 ![Python](https://img.shields.io/badge/-Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
