@@ -7,7 +7,6 @@ const { runCode } = require('../services/codeRunService');
 const { CODING_PROBLEM_COUNT } = require('../config/assessmentConfig');
 
 const TEST_DURATION_MINUTES = 120;
-const MAX_VIOLATIONS_BEFORE_DISQUALIFY = 5;
 
 // Validate token and return test info (no auth required)
 exports.validateToken = async (req, res) => {
@@ -218,11 +217,6 @@ exports.saveProgress = async (req, res) => {
     }
     if (typeof violationCount === 'number' && violationCount >= 0) {
       attempt.violationCount = violationCount;
-      if (violationCount >= MAX_VIOLATIONS_BEFORE_DISQUALIFY) {
-        attempt.status = 'disqualified';
-        attempt.submittedAt = new Date();
-        await TestInvitation.updateOne({ _id: attempt.testInvitation._id }, { status: 'disqualified' });
-      }
     }
     if (proctoringEvent && typeof proctoringEvent === 'object') {
       attempt.proctoringEvents.push({
@@ -258,6 +252,7 @@ exports.runCode = async (req, res) => {
       stderr: result.stderr,
       exitCode: result.exitCode,
       error: result.error || undefined,
+      runtime: result.runtime || undefined,
     });
   } catch (error) {
     console.error('Run code error:', error);

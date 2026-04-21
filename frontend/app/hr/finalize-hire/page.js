@@ -12,6 +12,7 @@ import {
   generateInterviewEmail,
   sendPhysicalInterviewRound,
   completeFinalHire,
+  closeJobNoEligibleCandidates,
   updateJobPost,
 } from "../../../lib/api";
 import { toast } from "react-toastify";
@@ -38,6 +39,7 @@ function FinalizeHireContent() {
 
   const [hireIds, setHireIds] = useState(new Set());
   const [hireBusy, setHireBusy] = useState(false);
+  const [closeNoEligibleBusy, setCloseNoEligibleBusy] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState("");
   const [updatingDeadline, setUpdatingDeadline] = useState(false);
 
@@ -125,6 +127,17 @@ function FinalizeHireContent() {
   const disqualifiedOnly = (data?.candidates || []).filter(
     (c) => String(c.testStatus).toLowerCase() === "disqualified"
   );
+  const candidatesList = data?.candidates || [];
+  const allDisqualifiedPool =
+    candidatesList.length > 0 &&
+    candidatesList.every((c) => String(c.testStatus).toLowerCase() === "disqualified");
+  const noTestParticipants = candidatesList.length === 0;
+  const showCloseNoEligible =
+    deadlinePassed &&
+    !closed &&
+    data?.hirePipelineStage === "test_sent" &&
+    !data?.physicalInterviewEmailSentAt &&
+    (noTestParticipants || allDisqualifiedPool);
 
   useEffect(() => {
     if (!data?.candidates) return;
@@ -211,6 +224,26 @@ function FinalizeHireContent() {
       toast.error("Failed");
     } finally {
       setPhysBusy(false);
+    }
+  };
+
+  const submitCloseNoEligible = async () => {
+    if (!jobId || !idToken) return;
+    const ok = window.confirm(
+      "Close this job with no further hiring?\n\nWe are sorry — no candidate was up to the mark. The job will be marked closed. This cannot be undone."
+    );
+    if (!ok) return;
+    setCloseNoEligibleBusy(true);
+    try {
+      const r = await closeJobNoEligibleCandidates(jobId, idToken);
+      if (r.success) {
+        toast.success(r.data?.message || "Job closed.");
+        load();
+      } else toast.error(r.error);
+    } catch {
+      toast.error("Failed");
+    } finally {
+      setCloseNoEligibleBusy(false);
     }
   };
 
@@ -402,13 +435,20 @@ function FinalizeHireContent() {
                 )}
               </div>
               {closed && (
-                <p className={`mt-3 flex items-center gap-2 text-sm font-medium ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
-                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  This job is closed. No further actions.
-                  {data.noHireSelected && " No offer was extended."}
-                </p>
+                <div className={`mt-3 space-y-2 text-sm font-medium ${darkMode ? "text-emerald-400" : "text-emerald-700"}`}>
+                  <p className="flex items-center gap-2">
+                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    This job is closed. No further actions.
+                    {data.noHireSelected && data.closureReason !== "no_eligible_pool" && " No offer was extended."}
+                  </p>
+                  {data.closureReason === "no_eligible_pool" && (
+                    <p className={`rounded-lg px-3 py-2 ${darkMode ? "bg-slate-800/80 text-slate-200" : "bg-white/80 text-slate-800"}`}>
+                      We are sorry — no candidate was up to the mark for this role. The position has been closed without further interviews.
+                    </p>
+                  )}
+                </div>
               )}
               {!deadlinePassed && data.assessmentDeadline && (
                 <p className={`mt-3 flex items-center gap-2 text-sm ${darkMode ? "text-amber-300" : "text-amber-700"}`}>
@@ -419,6 +459,33 @@ function FinalizeHireContent() {
                 </p>
               )}
             </div>
+
+            {showCloseNoEligible && (
+              <div
+                className={`rounded-2xl border p-5 mb-6 ${darkMode ? "border-amber-700/50 bg-amber-950/30" : "border-amber-300 bg-amber-50/90"}`}
+              >
+                <h3 className={`font-bold mb-2 flex items-center gap-2 ${darkMode ? "text-amber-200" : "text-amber-900"}`}>
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  No eligible candidates
+                </h3>
+                <p className={`text-sm mb-4 leading-relaxed ${darkMode ? "text-amber-100/90" : "text-amber-950/90"}`}>
+                  {noTestParticipants
+                    ? "There are no test participants for this job (no one in the assessment pool)."
+                    : "Every participant was disqualified (e.g. proctoring), so there is no one to shortlist for interviews."}{" "}
+                  You can close the job and record that we are sorry — no candidate was up to the mark.
+                </p>
+                <button
+                  type="button"
+                  onClick={submitCloseNoEligible}
+                  disabled={closeNoEligibleBusy}
+                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 ${darkMode ? "bg-amber-600 hover:bg-amber-500" : "bg-amber-700 hover:bg-amber-600"}`}
+                >
+                  {closeNoEligibleBusy ? "Closing…" : "Close job — no candidate up to the mark"}
+                </button>
+              </div>
+            )}
 
             <h2 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-white" : "text-slate-900"}`}>
               <svg className={`w-5 h-5 ${darkMode ? "text-cyan-400" : "text-cyan-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

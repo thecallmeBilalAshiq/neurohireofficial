@@ -989,6 +989,21 @@ export const getOnboardingHires = async (idToken) => {
   }
 };
 
+/** Close job when no eligible candidates (empty pool or all disqualified). */
+export const closeJobNoEligibleCandidates = async (jobId, idToken) => {
+  try {
+    const response = await api.post(`/hire-pipeline/close-no-eligible/${jobId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to close job',
+    };
+  }
+};
+
 // ==========================================
 // Online Test API (public - no auth)
 // ==========================================

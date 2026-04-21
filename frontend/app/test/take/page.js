@@ -55,6 +55,8 @@ function TestTakeContent() {
   const [runOutputByQuestion, setRunOutputByQuestion] = useState({});
   const [runLoadingByQuestion, setRunLoadingByQuestion] = useState({});
   const [runStdinByQuestion, setRunStdinByQuestion] = useState({});
+  /** When false, output panel is hidden for that question (can reopen by running again). */
+  const [outputPanelOpenByQuestion, setOutputPanelOpenByQuestion] = useState({});
   const [codingStep, setCodingStep] = useState(0);
   const tabSwitchCountRef = useRef(0);
   const saveIntervalRef = useRef(null);
@@ -170,35 +172,39 @@ function TestTakeContent() {
     });
   };
 
-  const handleCodingChange = (questionIndex, code, language = "javascript") => {
+  const handleCodingChange = useCallback((questionIndex, code, language = "javascript") => {
     if (status !== "in_progress") return;
     setCodingSubmissions((prev) => {
       const next = [...(prev || [])];
       next[questionIndex] = { ...next[questionIndex], questionIndex, code, language };
       return next;
     });
-  };
+  }, [status]);
 
   const handleRunCode = async (questionIndex, sampleInput = "") => {
     const sub = (codingSubmissions[questionIndex] || {});
     const code = sub.code || "";
     const language = sub.language || "javascript";
     if (!code.trim()) {
+      setOutputPanelOpenByQuestion((prev) => ({ ...prev, [questionIndex]: true }));
       setRunOutputByQuestion((prev) => ({ ...prev, [questionIndex]: { error: "No code to run." } }));
       return;
     }
+    setOutputPanelOpenByQuestion((prev) => ({ ...prev, [questionIndex]: true }));
     setRunLoadingByQuestion((prev) => ({ ...prev, [questionIndex]: true }));
     setRunOutputByQuestion((prev) => ({ ...prev, [questionIndex]: null }));
     const result = await runCode(language, code, sampleInput);
     setRunLoadingByQuestion((prev) => ({ ...prev, [questionIndex]: false }));
     if (result.success && result.data) {
+      const d = result.data;
       setRunOutputByQuestion((prev) => ({
         ...prev,
         [questionIndex]: {
-          stdout: result.data.stdout || "",
-          stderr: result.data.stderr || "",
-          exitCode: result.data.exitCode,
-          error: result.data.error,
+          stdout: d.stdout || "",
+          stderr: d.stderr || "",
+          exitCode: d.exitCode,
+          error: d.error,
+          runtime: d.runtime,
         },
       }));
     } else {
@@ -207,6 +213,10 @@ function TestTakeContent() {
         [questionIndex]: { error: result.error || "Run failed." },
       }));
     }
+  };
+
+  const closeOutputPanel = (questionIndex) => {
+    setOutputPanelOpenByQuestion((prev) => ({ ...prev, [questionIndex]: false }));
   };
   const getStdinForQuestion = (i) => runStdinByQuestion[i] !== undefined ? runStdinByQuestion[i] : (codingQuestions[i]?.sampleInput || "");
 
@@ -243,13 +253,15 @@ function TestTakeContent() {
     }
   }, []);
 
+  /** Pass only `true` for automatic proctoring disqualification (tab switch / max warnings). Do not pass the click event. */
   const handleSubmit = useCallback(async (proctoringDisqualification = false) => {
     if (status !== "in_progress") return;
+    const disq = proctoringDisqualification === true;
     await saveProgress();
     const result = await submitTest(attemptId, token, {
       mcqAnswers,
       codingSubmissions,
-      proctoringDisqualification: !!proctoringDisqualification,
+      proctoringDisqualification: disq,
     });
     if (result.success) {
       const disq = result.data?.disqualified === true || result.data?.status === "disqualified";
@@ -362,6 +374,7 @@ function TestTakeContent() {
         disabled={status !== "in_progress"}
         enableDetection={prepComplete}
         mcqMode={section === "mcq"}
+        compactTop={section === "coding"}
       />
 
       {/* Warm-up: camera + AI models load without running detection yet */}
@@ -438,9 +451,22 @@ function TestTakeContent() {
           >
             Coding
           </button>
+          {section === "coding" && codingQuestions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                const idx = Math.min(codingStep, codingQuestions.length - 1);
+                handleRunCode(idx, getStdinForQuestion(idx));
+              }}
+              disabled={runLoadingByQuestion[Math.min(codingStep, codingQuestions.length - 1)] || status !== "in_progress"}
+              className="px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 disabled:opacity-50 shadow-md shadow-emerald-900/20"
+            >
+              {runLoadingByQuestion[Math.min(codingStep, codingQuestions.length - 1)] ? "Running…" : "▶ Run code"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => handleSubmit(false)}
             className="px-4 py-1.5 rounded-lg bg-fuchsia-600 text-white text-sm font-medium hover:bg-fuchsia-700"
           >
             Submit test
@@ -549,12 +575,13 @@ function TestTakeContent() {
                     <option value="c">C</option>
                   </select>
                 </div>
-                <div className="flex-1 min-h-[520px] rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="flex-1 min-h-[460px] rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
                   <MonacoEditor
-                    height={520}
+                    key={`monaco-${attemptId}-${i}`}
+                    height={460}
                     language={monacoLanguageId(sub.language)}
                     theme="vs-dark"
-                    value={sub.code || ""}
+                    value={sub.code ?? ""}
                     onChange={(v) => handleCodingChange(i, v ?? "", sub.language || "javascript")}
                     options={{
                       minimap: { enabled: false },
@@ -562,6 +589,8 @@ function TestTakeContent() {
                       scrollBeyondLastLine: false,
                       wordWrap: "on",
                       automaticLayout: true,
+                      tabSize: 2,
+                      renderWhitespace: "selection",
                     }}
                   />
                 </div>
@@ -579,24 +608,40 @@ function TestTakeContent() {
                     type="button"
                     onClick={() => handleRunCode(i, getStdinForQuestion(i))}
                     disabled={runLoading || status !== "in_progress"}
-                    className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50 shrink-0"
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-50 shrink-0 shadow-lg shadow-emerald-900/25 ring-2 ring-emerald-500/30"
                   >
-                    {runLoading ? "Running…" : "Run code"}
+                    {runLoading ? "Running…" : "▶ Run"}
                   </button>
                 </div>
-                {runOut && (
-                  <div className="rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden shrink-0">
-                    <div className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300">
-                      Output (Piston / server)
+                {outputPanelOpenByQuestion[i] && (runLoading || runOut) && (
+                  <div className="rounded-lg border border-slate-200 dark:border-slate-600 overflow-hidden shrink-0 flex flex-col">
+                    <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <span>
+                        Output
+                        {runOut?.runtime && (
+                          <span className="ml-1.5 font-normal opacity-80">
+                            ({runOut.runtime === "judge0" ? "Judge0 CE" : runOut.runtime === "piston" ? "Piston" : runOut.runtime === "node" ? "Node (local)" : runOut.runtime === "custom" ? "Custom webhook" : runOut.runtime})
+                          </span>
+                        )}
+                        {runLoading && <span className="ml-2 text-violet-600 dark:text-violet-400">Running…</span>}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => closeOutputPanel(i)}
+                        className="shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700"
+                      >
+                        Close
+                      </button>
                     </div>
                     <pre className="p-3 font-mono text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 max-h-40 overflow-auto whitespace-pre-wrap wrap-break-word">
-                      {runOut.error && <span className="text-red-600 dark:text-red-400">{runOut.error}</span>}
-                      {runOut.stderr && <span className="text-amber-600 dark:text-amber-400">{runOut.stderr}</span>}
-                      {runOut.stdout != null && runOut.stdout !== "" && runOut.stdout}
-                      {runOut.exitCode != null && runOut.exitCode !== 0 && !runOut.stderr && !runOut.error && (
+                      {runLoading && !runOut && <span className="text-slate-500">Executing…</span>}
+                      {runOut?.error && <span className="text-red-600 dark:text-red-400">{runOut.error}</span>}
+                      {runOut?.stderr && <span className="text-amber-600 dark:text-amber-400">{runOut.stderr}</span>}
+                      {runOut?.stdout != null && runOut.stdout !== "" && runOut.stdout}
+                      {runOut && runOut.exitCode != null && runOut.exitCode !== 0 && !runOut.stderr && !runOut.error && (
                         <span className="text-slate-500">Exit code: {runOut.exitCode}</span>
                       )}
-                      {!runOut.error && !runOut.stderr && (runOut.stdout == null || runOut.stdout === "") && runOut.exitCode === 0 && (
+                      {runOut && !runOut.error && !runOut.stderr && (runOut.stdout == null || runOut.stdout === "") && runOut.exitCode === 0 && (
                         <span className="text-slate-500">(no output)</span>
                       )}
                     </pre>

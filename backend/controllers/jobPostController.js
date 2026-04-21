@@ -3,6 +3,7 @@ const JobPost = require('../models/JobPost');
 const User = require('../models/User');
 const Application = require('../models/Application');
 const { cleanJobDescription } = require('../utils/textCleaner');
+const { candidateOpenForApplicationsFilter } = require('../utils/jobCandidateVisibility');
 
 // Helper function to update remarks based on deadline
 // NOTE: We now keep `remarks` under explicit HR control (via finalize job),
@@ -104,17 +105,16 @@ exports.getJobPostByIdForCandidate = [verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Only candidates can view this endpoint' });
     }
 
-    const now = new Date();
-    const jobPost = await JobPost.findOne({ 
+    const jobPost = await JobPost.findOne({
       _id: req.params.id,
-      activeStatus: true,
-      deadline: { $gte: now },
-      remarks: { $ne: 'deleted' }
+      ...candidateOpenForApplicationsFilter(),
     })
       .populate('createdBy', 'name email');
     
     if (!jobPost) {
-      return res.status(404).json({ error: 'Job post not found or no longer available' });
+      return res.status(404).json({
+        error: 'Job post not found or no longer available. It may be closed or no longer accepting applications.',
+      });
     }
     
     res.json(jobPost);

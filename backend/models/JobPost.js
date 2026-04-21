@@ -77,6 +77,8 @@ const jobPostSchema = new mongoose.Schema({
   finalHireCompletedAt: { type: Date, default: null },
   /** HR explicitly chose no acceptable candidate at final step */
   noHireSelected: { type: Boolean, default: false },
+  /** Optional note when closing without hires, e.g. no_eligible_pool */
+  closureReason: { type: String, default: '' },
   createdBy: { 
     type: mongoose.Schema.Types.ObjectId, 
     ref: 'User', 
