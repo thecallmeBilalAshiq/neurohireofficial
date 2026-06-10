@@ -215,5 +215,5 @@ backend/
 ├── ...
 └── package.json
 ```
-
 Your frontend already uses `NEXT_PUBLIC_API_URL` / `NEXT_PUBLIC_BACKEND_URL` from `lib/config.js`, so once these are set in Vercel to your backend URL, the deployed app will use the online backend and MongoDB.
+
