@@ -1,47 +1,8 @@
-const Bytez = require('bytez.js');
-
-let sdk, model;
-
-try {
-  const key = process.env.BYTEZ_API_KEY;
-  const modelId = process.env.BYTEZ_MODEL || 'openai/gpt-4o';
-  if (key) {
-    sdk = new Bytez(key);
-    model = sdk.model(modelId);
-  }
-} catch (error) {
-  console.error('LLM functionality will not work until bytez.js is installed.');
-}
-
-/**
- * Helper function to extract text from Bytez SDK output
- */
-function extractOutputText(output) {
-  if (typeof output === 'string') {
-    return output;
-  } else if (output && typeof output === 'object') {
-    // Handle object response - try common properties
-    if (output.content) {
-      return typeof output.content === 'string' ? output.content : JSON.stringify(output.content);
-    } else if (output.text) {
-      return typeof output.text === 'string' ? output.text : JSON.stringify(output.text);
-    } else if (output.message) {
-      return typeof output.message === 'string' ? output.message : JSON.stringify(output.message);
-    } else if (Array.isArray(output)) {
-      // If it's an array, join the content
-      return output.map(item => {
-        if (typeof item === 'string') return item;
-        if (item && item.content) return item.content;
-        return JSON.stringify(item);
-      }).join('\n');
-    } else {
-      // Fallback: stringify the object
-      return JSON.stringify(output, null, 2);
-    }
-  } else {
-    return String(output || '');
-  }
-}
+const {
+  isLlmAvailable,
+  runLlm,
+  extractTextFromOutput,
+} = require('./openRouterService');
 
 /**
  * Helper function to parse score from LLM output
@@ -109,14 +70,26 @@ function parseScoreFromOutput(outputText, fieldName, allowDecimals = false) {
   }
 }
 
+async function scoreWithLlm(prompt, fieldName, allowDecimals = false) {
+  if (!isLlmAvailable()) {
+    throw new Error('LLM service not available');
+  }
+
+  const { error, output } = await runLlm([{ role: 'user', content: prompt }]);
+  if (error) {
+    console.error(`LLM Error for ${fieldName} scoring:`, error);
+    return 0;
+  }
+
+  const outputText = extractTextFromOutput(output);
+  console.log(`Raw output for ${fieldName} scoring:`, outputText.substring(0, 200));
+  return parseScoreFromOutput(outputText, fieldName, allowDecimals);
+}
+
 /**
  * Score candidate's experience using LLM
  */
 async function scoreExperience(experience, jobDescription) {
-  if (!model) {
-    throw new Error('LLM service not available');
-  }
-
   const prompt = `Rate the following candidate's experience on a scale of 0-10 for relevance and value to the job requirements provided below. Score based on how well the experience aligns with the job's needs, quality, recency, and depth.
 
 Job Requirements: ${jobDescription}
@@ -132,22 +105,9 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 {"score": <integer between 0 and 10>}`;
 
   try {
-    const { error, output } = await model.run([
-      { role: "user", content: prompt }
-    ]);
-
-    if (error) {
-      console.error('LLM Error for experience scoring:', error);
-      return 0;
-    }
-
-    const outputText = extractOutputText(output);
-    console.log('Raw output for experience scoring:', outputText.substring(0, 200));
-    
-    return parseScoreFromOutput(outputText, 'experience');
+    return await scoreWithLlm(prompt, 'experience');
   } catch (error) {
     console.error('Error scoring experience:', error);
-    console.error('Error stack:', error.stack);
     return 0;
   }
 }
@@ -156,10 +116,6 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
  * Score candidate's projects using LLM
  */
 async function scoreProjects(projects, jobDescription) {
-  if (!model) {
-    throw new Error('LLM service not available');
-  }
-
   const prompt = `Rate the following candidate's projects on a scale of 0-10 for relevance and value to the job requirements provided below. Score based on how well the projects align with the job's needs, quality, recency, and depth.
 
 Job Requirements: ${jobDescription}
@@ -175,22 +131,9 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 {"score": <integer between 0 and 10>}`;
 
   try {
-    const { error, output } = await model.run([
-      { role: "user", content: prompt }
-    ]);
-
-    if (error) {
-      console.error('LLM Error for projects scoring:', error);
-      return 0;
-    }
-
-    const outputText = extractOutputText(output);
-    console.log('Raw output for projects scoring:', outputText.substring(0, 200));
-    
-    return parseScoreFromOutput(outputText, 'projects');
+    return await scoreWithLlm(prompt, 'projects');
   } catch (error) {
     console.error('Error scoring projects:', error);
-    console.error('Error stack:', error.stack);
     return 0;
   }
 }
@@ -199,10 +142,6 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
  * Score candidate's certificates using LLM
  */
 async function scoreCertificates(certificates, jobDescription) {
-  if (!model) {
-    throw new Error('LLM service not available');
-  }
-
   const prompt = `Rate the following candidate's certificates on a scale of 0-10 for relevance and value to the job requirements provided below. Score based on how well the certificates align with the job's needs, quality, recency, and depth.
 
 Job Requirements: ${jobDescription}
@@ -218,22 +157,9 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 {"score": <integer between 0 and 10>}`;
 
   try {
-    const { error, output } = await model.run([
-      { role: "user", content: prompt }
-    ]);
-
-    if (error) {
-      console.error('LLM Error for certificates scoring:', error);
-      return 0;
-    }
-
-    const outputText = extractOutputText(output);
-    console.log('Raw output for certificates scoring:', outputText.substring(0, 200));
-    
-    return parseScoreFromOutput(outputText, 'certificates');
+    return await scoreWithLlm(prompt, 'certificates');
   } catch (error) {
     console.error('Error scoring certificates:', error);
-    console.error('Error stack:', error.stack);
     return 0;
   }
 }
@@ -242,10 +168,6 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
  * Score candidate's skills using LLM
  */
 async function scoreSkills(candidateSkills, requiredSkills, jobDescription) {
-  if (!model) {
-    throw new Error('LLM service not available');
-  }
-
   // Convert skills to readable format
   let candidateSkillsText = '';
   if (Array.isArray(candidateSkills)) {
@@ -286,22 +208,9 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 {"score": <integer between 0 and 10>}`;
 
   try {
-    const { error, output } = await model.run([
-      { role: "user", content: prompt }
-    ]);
-
-    if (error) {
-      console.error('LLM Error for skills scoring:', error);
-      return 0;
-    }
-
-    const outputText = extractOutputText(output);
-    console.log('Raw output for skills scoring:', outputText.substring(0, 200));
-    
-    return parseScoreFromOutput(outputText, 'skills');
+    return await scoreWithLlm(prompt, 'skills');
   } catch (error) {
     console.error('Error scoring skills:', error);
-    console.error('Error stack:', error.stack);
     return 0;
   }
 }
@@ -310,10 +219,6 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
  * Score candidate's languages using LLM
  */
 async function scoreLanguages(languages, jobDescription) {
-  if (!model) {
-    throw new Error('LLM service not available');
-  }
-
   // Handle languages as array or string
   let languagesText = '';
   if (Array.isArray(languages)) {
@@ -348,22 +253,9 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 {"score": <integer between 0 and 10>}`;
 
   try {
-    const { error, output } = await model.run([
-      { role: "user", content: prompt }
-    ]);
-
-    if (error) {
-      console.error('LLM Error for languages scoring:', error);
-      return 0;
-    }
-
-    const outputText = extractOutputText(output);
-    console.log('Raw output for languages scoring:', outputText.substring(0, 200));
-    
-    return parseScoreFromOutput(outputText, 'languages');
+    return await scoreWithLlm(prompt, 'languages');
   } catch (error) {
     console.error('Error scoring languages:', error);
-    console.error('Error stack:', error.stack);
     return 0;
   }
 }
@@ -372,10 +264,6 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
  * Score candidate's education using LLM
  */
 async function scoreEducation(education, jobDescription) {
-  if (!model) {
-    throw new Error('LLM service not available');
-  }
-
   // Handle education as object or string
   let educationText = '';
   let university = '';
@@ -454,23 +342,9 @@ IMPORTANT: You must return ONLY a valid JSON object in this exact format with no
 {"score": <number between 0 and 10, with 1 decimal place>}`;
 
   try {
-    const { error, output } = await model.run([
-      { role: "user", content: prompt }
-    ]);
-
-    if (error) {
-      console.error('LLM Error for education scoring:', error);
-      return 0;
-    }
-
-    const outputText = extractOutputText(output);
-    console.log('Raw output for education scoring:', outputText.substring(0, 200));
-    
-    // Allow decimal values for education score
-    return parseScoreFromOutput(outputText, 'education', true);
+    return await scoreWithLlm(prompt, 'education', true);
   } catch (error) {
     console.error('Error scoring education:', error);
-    console.error('Error stack:', error.stack);
     return 0;
   }
 }
@@ -596,7 +470,7 @@ async function scoreCandidate(application, jobPost) {
     console.log('- Required Skills:', requiredSkills);
 
     // Check if model is available
-    if (!model) {
+    if (!isLlmAvailable()) {
       console.error('LLM model not available');
       throw new Error('LLM service not available');
     }
@@ -668,4 +542,3 @@ module.exports = {
   scoreLanguages,
   calculateTotalScore
 };
-

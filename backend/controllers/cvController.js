@@ -7,19 +7,11 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
-// Bytez LLM (default: openai/gpt-4o, override with BYTEZ_MODEL)
-let Bytez, sdk, model;
-try {
-  Bytez = require('bytez.js');
-  const key = process.env.BYTEZ_API_KEY;
-  const modelId = process.env.BYTEZ_MODEL || 'openai/gpt-4o';
-  if (key) {
-    sdk = new Bytez(key);
-    model = sdk.model(modelId);
-  }
-} catch (error) {
-  console.error('LLM functionality will not work until bytez.js is installed.');
-}
+const {
+  isLlmAvailable,
+  runLlm,
+  LLM_UNAVAILABLE_MSG,
+} = require('../services/openRouterService');
 
 // Middleware to verify Firebase token and get user
 const verifyToken = async (req, res, next) => {
@@ -160,7 +152,7 @@ exports.downloadCVTemplate = async (req, res) => {
   }
 };
 
-// Autofill CV using Bytez (default openai/gpt-4o)
+// Autofill CV using OpenRouter LLM
 exports.autofillCV = [
   verifyToken, 
   (req, res, next) => {
@@ -181,9 +173,9 @@ exports.autofillCV = [
   },
   async (req, res) => {
     try {
-      if (!model) {
+      if (!isLlmAvailable()) {
         return res.status(503).json({ 
-          error: 'LLM service not available. Please ensure bytez.js is installed and BYTEZ_API_KEY is set.' 
+          error: LLM_UNAVAILABLE_MSG
         });
       }
 
@@ -372,7 +364,7 @@ CV Text:
 ${cvText.substring(0, 8000)}`;
 
     try {
-      const { error, output } = await model.run([
+      const { error, output } = await runLlm([
         {
           "role": "user",
           "content": prompt

@@ -1,6 +1,8 @@
+const dotenv = require('dotenv');
+dotenv.config();
+
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const config = require('./config/appConfig');
 const authRoutes = require('./routes/auth');
@@ -14,8 +16,6 @@ const cvRoutes = require('./routes/cv');
 const testRoutes = require('./routes/test');
 const contactRoutes = require('./routes/contact');
 const hirePipelineRoutes = require('./routes/hirePipeline');
-
-dotenv.config();
 
 const app = express();
 

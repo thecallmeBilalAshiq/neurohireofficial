@@ -5,7 +5,7 @@ const cvController = require('../controllers/cvController');
 // Check CV format
 router.post('/check-format', cvController.checkCVFormat);
 
-// Autofill CV using Bytez LLM
+// Autofill CV using OpenRouter LLM
 router.post('/autofill', cvController.autofillCV);
 
 // Download CV template

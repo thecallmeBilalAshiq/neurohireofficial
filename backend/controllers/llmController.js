@@ -2,25 +2,13 @@ const dotenv = require('dotenv');
 const axios = require('axios');
 dotenv.config();
 
+const {
+  isLlmAvailable,
+  runLlm,
+  extractTextFromOutput,
+  LLM_UNAVAILABLE_MSG,
+} = require('../services/openRouterService');
 
-let Bytez, sdk, model;
-
-try {
-  Bytez = require('bytez.js');
-  const key = process.env.BYTEZ_API_KEY;
-  const modelId = process.env.BYTEZ_MODEL || 'openai/gpt-4o';
-
-  if (!key) {
-    console.error('Warning: BYTEZ_API_KEY not set. LLM functionality will not work.');
-  } else {
-    sdk = new Bytez(key);
-    model = sdk.model(modelId);
-  }
-} catch (error) {
-  console.error('LLM functionality will not work until bytez.js is installed.');
-}
-
-const BYTEZ_MODEL_ID_LOWER = (process.env.BYTEZ_MODEL || 'openai/gpt-4o').toLowerCase();
 const { CODING_PROBLEM_COUNT, CODING_MARKS_CAPS } = require('../config/assessmentConfig');
 
 /** Test link validity from invite send (`TestInvitation.expiresAt`, `JobPost.assessmentDeadline`). */
@@ -28,20 +16,6 @@ const TEST_INVITE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes (was 1 week)
 
 function formatTestDeadlineForEmail(date) {
   return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-/** Bytez returns errors if the model does not support max_completion_tokens (e.g. Gemma). */
-function bytezMaxCompletionOption(maxTokens) {
-  if (maxTokens == null || maxTokens <= 0) return undefined;
-  if (BYTEZ_MODEL_ID_LOWER.includes('gemma')) return undefined;
-  if (process.env.BYTEZ_DISABLE_MAX_COMPLETION_TOKENS === '1') return undefined;
-  return { max_completion_tokens: maxTokens };
-}
-
-async function runBytez(messages, maxTokens) {
-  if (!model) throw new Error('LLM model not initialized');
-  const opts = bytezMaxCompletionOption(maxTokens);
-  return opts ? model.run(messages, opts) : model.run(messages);
 }
 
 const { cleanJobDescription } = require('../utils/textCleaner');
@@ -52,9 +26,9 @@ const N8N_EMAIL_WEBHOOK_URL = process.env.N8N_EMAIL_WEBHOOK_URL || 'http://local
 // Generate job description from form data
 exports.generateJobDescription = async (req, res) => {
   try {
-    if (!model) {
+    if (!isLlmAvailable()) {
       return res.status(503).json({ 
-        error: 'LLM service not available. Please ensure bytez.js is installed and BYTEZ_API_KEY is set.' 
+        error: LLM_UNAVAILABLE_MSG 
       });
     }
 
@@ -209,14 +183,14 @@ Write a complete, polished job description that would attract top talent. CRITIC
 
     let output, error;
     try {
-      const result = await runBytez([
+      const result = await runLlm([
         {
           "role": "user",
           "content": prompt
         }
       ], 4096);
       
-      // Handle different response formats from Bytez SDK
+      // Handle different response formats from OpenRouter
       if (result && typeof result === 'object') {
         error = result.error || null;
         output = result.output || result.content || result.text || result;
@@ -234,14 +208,14 @@ Write a complete, polished job description that would attract top talent. CRITIC
       // Handle specific error types
       if (error.message && (error.message.includes('Unauthorized') || error.message.includes('401'))) {
         return res.status(401).json({ 
-          error: 'API key is invalid or expired. Please check your BYTEZ_API_KEY.' 
+          error: 'API key is invalid or expired. Please check your OPENROUTER_API_KEY.' 
         });
       }
       
       if (error.message && error.message.includes('fetch failed')) {
         return res.status(503).json({ 
           error: 'LLM service is currently unavailable. Please try again later.',
-          details: 'Network connection to LLM service failed. Check your internet connection and BYTEZ_API_KEY.'
+          details: 'Network connection to LLM service failed. Check your internet connection and OPENROUTER_API_KEY.'
         });
       }
       
@@ -291,12 +265,12 @@ Write a complete, polished job description that would attract top talent. CRITIC
   }
 };
 
-// Generate interview invitation email using Bytez LLM
+// Generate interview invitation email using OpenRouter LLM
 exports.generateInterviewEmail = async (req, res) => {
   try {
-    if (!model) {
+    if (!isLlmAvailable()) {
       return res.status(503).json({ 
-        error: 'LLM service not available. Please ensure bytez.js is installed and BYTEZ_API_KEY is set.' 
+        error: LLM_UNAVAILABLE_MSG 
       });
     }
 
@@ -361,7 +335,7 @@ IMPORTANT: Return ONLY valid JSON, no additional text or markdown.`;
 
     let output, error;
     try {
-      const result = await runBytez([
+      const result = await runLlm([
         {
           "role": "user",
           "content": prompt
@@ -552,20 +526,6 @@ exports.sendInterviewEmails = async (req, res) => {
 const TestMcqPool = require('../models/TestMcqPool');
 const CodingQuestion = require('../models/CodingQuestion');
 
-function extractTextFromOutput(output) {
-  if (!output) return '';
-  if (typeof output === 'string') return output;
-  const getStr = (v) => (typeof v === 'string' ? v : (v != null ? JSON.stringify(v) : ''));
-  if (output.content) return getStr(output.content);
-  if (output.text) return getStr(output.text);
-  if (output.result) return getStr(output.result);
-  if (output.data) return getStr(output.data);
-  if (output.message && output.message.content) return getStr(output.message.content);
-  if (output.message) return getStr(output.message);
-  if (Array.isArray(output)) return output.map(item => (typeof item === 'string' ? item : (item?.content ?? item?.text ?? JSON.stringify(item)))).join('\n');
-  return JSON.stringify(output);
-}
-
 /** Extract a JSON array from LLM text (handles markdown code blocks and loose JSON). */
 function parseMcqJsonFromLLM(text) {
   if (!text || typeof text !== 'string') return null;
@@ -644,7 +604,7 @@ Requirements:
 
 Output ONLY valid JSON array, no markdown or extra text. Example format:
 [{"questionText":"What is the time complexity of binary search?","options":["O(n)","O(log n)","O(n^2)","O(1)"],"correctIndex":1}, ...]`;
-  const result = await runBytez(
+  const result = await runLlm(
     [{ role: 'user', content: prompt }],
     16384
   );
@@ -705,7 +665,7 @@ Rules:
 Example format for each object: {"title":"Two Sum","statement":"Given an array of integers, return indices of two numbers that add up to target.","inputFormat":"First line: n. Second line: array. Third: target","outputFormat":"Two space-separated indices","sampleInput":"4","sampleOutput":"0 1","constraints":"2 <= n <= 10000","difficulty":"medium"}
 
 Reply with only the JSON array starting with [ and ending with ].`;
-  const result = await runBytez(
+  const result = await runLlm(
     [{ role: 'user', content: prompt }],
     8192
   );
@@ -741,7 +701,7 @@ Reply with only the JSON array starting with [ and ending with ].`;
 // Generate 100 MCQs for a job (HR/manual trigger)
 exports.generateMcqPool = async (req, res) => {
   try {
-    if (!model) return res.status(503).json({ error: 'LLM service not available.' });
+    if (!isLlmAvailable()) return res.status(503).json({ error: 'LLM service not available.' });
     const { jobId } = req.params;
     const JobPost = require('../models/JobPost');
     const job = await JobPost.findById(jobId);
@@ -760,7 +720,7 @@ exports.generateMcqPool = async (req, res) => {
 // Generate coding questions for a job (HR/manual trigger)
 exports.generateCodingQuestions = async (req, res) => {
   try {
-    if (!model) return res.status(503).json({ error: 'LLM service not available.' });
+    if (!isLlmAvailable()) return res.status(503).json({ error: 'LLM service not available.' });
     const { jobId } = req.params;
     const JobPost = require('../models/JobPost');
     const job = await JobPost.findById(jobId);
@@ -818,7 +778,7 @@ exports.evaluateTestAttempt = async (attemptId) => {
   let evaluationSummary = '';
   let codingBreakdown = [];
 
-  if (model && codingDoc.questions.length > 0 && attempt.codingSubmissions && attempt.codingSubmissions.length > 0) {
+  if (isLlmAvailable() && codingDoc.questions.length > 0 && attempt.codingSubmissions && attempt.codingSubmissions.length > 0) {
     const codingSubs = attempt.codingSubmissions;
     const nProblems = Math.min(CODING_PROBLEM_COUNT, codingDoc.questions.length);
     const parts = codingDoc.questions.slice(0, nProblems).map((q, i) => {
@@ -837,7 +797,7 @@ Score each solution: ${capsStr} (total max 70). Use 0 if empty or nonsensical. C
 Reply with ONLY a JSON object (no markdown): { "scores": [s1, s2, s3], "totalCodingScore": number (sum, max 70), "feedback": "one short paragraph" }`;
 
     try {
-      const result = await runBytez(
+      const result = await runLlm(
         [{ role: 'user', content: prompt }],
         1024
       );
@@ -902,7 +862,7 @@ Reply with ONLY a JSON object (no markdown): { "scores": [s1, s2, s3], "totalCod
  * Used for PDF export. Returns plain text or markdown.
  */
 exports.generateTrainingPlanContent = async (application, jobPost) => {
-  if (!model) return null;
+  if (!isLlmAvailable()) return null;
   const candidateName = application.formData?.firstName && application.formData?.lastName
     ? `${application.formData.firstName} ${application.formData.lastName}`
     : application.candidate?.name || 'Candidate';
@@ -926,7 +886,7 @@ Output a clear, professional training plan with:
 
 Use plain text with clear headings. Keep each section concise but actionable. No markdown code blocks.`;
   try {
-    const result = await runBytez([{ role: 'user', content: prompt }], 2048);
+    const result = await runLlm([{ role: 'user', content: prompt }], 2048);
     const output = result?.output ?? result?.content ?? result?.text ?? result;
     return extractTextFromOutput(output) || 'Training plan could not be generated.';
   } catch (e) {
@@ -1043,7 +1003,7 @@ exports.saveJobTestContent = async (req, res) => {
 /** Regenerate MCQ and/or coding using HR instructions (LLM). */
 exports.regenerateJobTestWithInstruction = async (req, res) => {
   try {
-    if (!model) {
+    if (!isLlmAvailable()) {
       return res.status(503).json({ error: 'LLM service not available.' });
     }
     const { jobId } = req.params;
