@@ -1,0 +1,3 @@
+echo "neurohire-c4e9f-firebase-adminsdk-fbsvc-75140c9924.json" >> .gitignore
+echo ".env" >> .gitignore
+echo "*.json" >> .gitignore
