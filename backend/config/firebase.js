@@ -12,13 +12,20 @@ function resolveCredentialPath(envPath) {
 }
 
 function loadServiceAccount() {
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  // Check if credentials are provided directly as JSON string in env variables
+  const directJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (directJson && directJson.trim().startsWith('{')) {
+    try {
+      return JSON.parse(directJson);
+    } catch (e) {
+      console.error("Failed to parse Firebase service account JSON string:", e.message);
+    }
   }
 
+  // Otherwise, treat as a path
   const envPath = resolveCredentialPath(
     process.env.FIREBASE_SERVICE_ACCOUNT_PATH ||
-    process.env.FIREBASE_SERVICE_ACCOUNT
+    (process.env.FIREBASE_SERVICE_ACCOUNT && !process.env.FIREBASE_SERVICE_ACCOUNT.trim().startsWith('{') ? process.env.FIREBASE_SERVICE_ACCOUNT : null)
   );
   if (envPath && fs.existsSync(envPath)) {
     return JSON.parse(fs.readFileSync(envPath, "utf8"));
