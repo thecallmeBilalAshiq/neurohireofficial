@@ -6,12 +6,15 @@
 
 // Helper function to get API base URL
 const getApiBaseUrl = () => {
+  let url = '';
   if (process.env.NEXT_PUBLIC_API_URL) {
-    // Strip trailing slash if present
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
+    url = process.env.NEXT_PUBLIC_API_URL;
+  } else {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+    url = `${backendUrl}/api`;
   }
-  const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
-  return `${backendUrl}/api`;
+  // Remove trailing slashes and clean up duplicate slashes (except the protocol '://')
+  return url.replace(/\/$/, '').replace(/([^:]\/)\/+/g, "$1");
 };
 
 const config = {
@@ -94,13 +97,14 @@ const config = {
   // Helper functions
   getApiUrl: (endpoint) => {
     const baseUrl = config.api.getBaseUrl();
-    // Remove leading /api if endpoint already includes it
     const cleanEndpoint = endpoint.startsWith('/api') ? endpoint : endpoint;
-    return `${baseUrl}${cleanEndpoint}`;
+    const combined = `${baseUrl}${cleanEndpoint}`;
+    return combined.replace(/\/$/, '').replace(/([^:]\/)\/+/g, "$1");
   },
 
   getFullUrl: (path) => {
-    return `${config.frontend.url}${path}`;
+    const combined = `${config.frontend.url}${path}`;
+    return combined.replace(/\/$/, '').replace(/([^:]\/)\/+/g, "$1");
   },
 };
 
