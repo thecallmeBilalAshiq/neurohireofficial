@@ -142,3 +142,22 @@ For the `FIREBASE_SERVICE_ACCOUNT` environment variable on Railway:
 2. Copy the entire text contents.
 3. Paste it directly as the value of the `FIREBASE_SERVICE_ACCOUNT` variable in Railway. 
 4. The backend is configured to automatically parse the raw JSON string from `process.env.FIREBASE_SERVICE_ACCOUNT` if it's set.
+
+---
+
+## 🛠️ Troubleshooting & Common Errors
+
+### 1. Firebase Authentication: Domain not allowlisted (`auth/unauthorized-continue-uri`)
+If you see the error:
+`Signup error: FirebaseError: Firebase: Domain not allowlisted by project (auth/unauthorized-continue-uri)`
+when trying to sign up or request a password reset, it means the Firebase project doesn't authorize your deployed Vercel domain to perform authentication redirects.
+
+#### How to Resolve:
+1. Go to the [Firebase Console](https://console.firebase.google.com/).
+2. Select your project.
+3. In the left-hand sidebar, navigate to **Build** -> **Authentication**.
+4. Go to the **Settings** tab at the top.
+5. In the left menu of the settings page, select **Authorized domains**.
+6. Click **Add domain** and enter your Vercel frontend domain (e.g. `your-frontend-vercel-url.vercel.app`, without `https://` or path prefixes).
+7. Click **Add**. The change takes effect immediately.
+
