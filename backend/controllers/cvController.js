@@ -189,10 +189,12 @@ exports.autofillCV = [
       });
 
       if (!req.file) {
+        const safeHeaders = { ...req.headers };
+        ['authorization', 'cookie', 'x-api-key', 'token', 'x-auth-token', 'proxy-authorization'].forEach(h => delete safeHeaders[h]);
         console.error('No file in request:', {
           files: req.files,
           body: req.body,
-          headers: req.headers
+          headers: safeHeaders
         });
         return res.status(400).json({ error: 'No CV file uploaded. Please ensure you are uploading a PDF file.' });
       }

@@ -60,6 +60,27 @@ const applicationSchema = new mongoose.Schema({
   interviewInviteSentAt: { type: Date, default: null },
   selectedAsHire: { type: Boolean, default: false },
   trainingPlanPdfPath: { type: String, default: null },
+  onboardingStatus: {
+    type: String,
+    enum: ['none', 'generating', 'active', 'completed', 'evaluated'],
+    default: 'none'
+  },
+  onboardingTasks: [{
+    weekNumber: Number,
+    jiraIssueKey: String,
+    jiraIssueId: String,
+    title: String,
+    description: String,
+    deliverables: String,
+    submissionText: String,
+    submittedAt: Date,
+    jiraStatus: { type: String, default: 'To Do' }
+  }],
+  onboardingEvaluation: {
+    feedbackText: { type: String, default: '' },
+    score: { type: Number, default: 0 },
+    evaluatedAt: { type: Date, default: null }
+  },
   /** Condolence: not in CV top-50 when test invites sent */
   condolenceNotShortlistedForTestSentAt: { type: Date, default: null },
   /** Invited to on-site / video interview after online test */

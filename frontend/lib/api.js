@@ -1083,5 +1083,61 @@ export const runCode = async (language, code, stdin = '') => {
   }
 };
 
+export const initiateOnboarding = async (applicationId, idToken) => {
+  try {
+    const response = await api.post(`/onboarding/initiate/${applicationId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to initiate onboarding',
+    };
+  }
+};
+
+export const getOnboardingProgress = async (applicationId, idToken) => {
+  try {
+    const response = await api.get(`/onboarding/progress/${applicationId}`, {
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to fetch onboarding progress',
+    };
+  }
+};
+
+export const submitWeeklyTask = async (applicationId, weekNumber, submissionText, idToken) => {
+  try {
+    const response = await api.post(`/onboarding/submit/${applicationId}/${weekNumber}`, { submissionText }, {
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to submit weekly deliverables',
+    };
+  }
+};
+
+export const evaluateOnboardingPerformance = async (applicationId, idToken) => {
+  try {
+    const response = await api.post(`/onboarding/evaluate/${applicationId}`, {}, {
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Failed to generate AI evaluation',
+    };
+  }
+};
+
 export default api;
 

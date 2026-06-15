@@ -1,0 +1,213 @@
+{
+  "name": "Job Post to Social Media",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job-post",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -464,
+        64
+      ],
+      "id": "d9d2144c-0acb-429f-8214-5bf5b54098bb",
+      "name": "Webhook1",
+      "webhookId": "ba5090f3-5679-42a7-847b-58d6b091ab8b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0288887c-9a87-4d62-b848-ccbb352f0ce3",
+              "leftValue": "={{ $json.body.image.isBase64 }}",
+              "rightValue": "=true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        64
+      ],
+      "id": "b6c2aa9e-f913-42e4-8458-d4cc9e00effa",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Extract base64 data\nconst base64Data = $input.item.json.body.image.url;\nconst base64String = base64Data.split(',')[1]; // Remove data:image/png;base64, prefix\n\n// Convert base64 to buffer\nconst imageBuffer = Buffer.from(base64String, 'base64');\n\n// Return as binary data\nreturn {\n  json: $input.item.json,\n  binary: {\n    data: {\n      data: imageBuffer,\n      mimeType: 'image/png',\n      fileName: 'job-post-image.png'\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8b3b4116-d764-486e-9693-305dc2630707",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.body.image.url }}",
+        "options": {
+          "response": {
+            "response": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        0,
+        160
+      ],
+      "id": "087f8cfc-b57f-4b86-9f85-0b1f410eace1",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const jobPost = $input.item.json.body.jobPost;\n\nconst message = `🎯 ${jobPost.jobTitle}\\n\\n📍 Location: ${jobPost.location}\\n💼 Job Type: ${jobPost.jobType}\\n💰 Salary: ${jobPost.salary}\\n📚 Experience: ${jobPost.experience}\\n🎓 Education: ${jobPost.education}\\n\\n📝 Description:\\n${jobPost.description}\\n\\n${jobPost.skills ? `🔧 Skills: ${jobPost.skills}` : ''}\\n\\n${jobPost.deadline ? `⏰ Deadline: ${jobPost.deadline}` : ''}\\n\\n🔗 Apply Now: ${jobPost.applicationUrl}`;\n\n// Explicitly carry binary forward\nconst binaryData = $input.item.binary ?? {};\n\nreturn {\n  json: {\n    message: message,\n    jobPost: jobPost\n  },\n  binary: binaryData\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        80
+      ],
+      "id": "14b9cffc-1feb-4080-973b-fca32efda3a8",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v19.0/1005504162636199/photos",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "source",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "caption",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "access_token",
+              "value": "EAANGGjZBfXY0BRkkYczJS1Hy0q53hR9EiGTekvH4NMczoXoeFXwelbdCjEg2N2MDPFWSDJtLZAS0NQ9F17F9uVYKyrzmyr9Q0s60IOLjARxj4UtmhRrwFrOSpdxN7049JzZBGLkwZAYhhoZBdFeTlMORv0IPoqozGcG0cCjHwuPWzTntNuWCWZAdjIfLeqSAOnnGmMgDzA8tWlktNiBwM0AZCb5W8JYMm6mNqyndkMKZAWkZBQpMzqGgiZBNEH7ARNO3hedzmmONNWIJlXmBpZC5S94PQZDZD"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        448,
+        80
+      ],
+      "id": "11b86db8-e0bd-48af-91fa-969eb3594e40",
+      "name": "Post to Facebook Page"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Post to Facebook Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a2ecf028-f9a2-4938-b287-aea13c890492",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5938d3d01caa954427263a0b94e352e1282cca99ce8f79fa7230e3918d289db8"
+  },
+  "id": "PqdwMcn0twTCeAoe",
+  "tags": []
+}

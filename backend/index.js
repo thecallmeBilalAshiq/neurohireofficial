@@ -16,6 +16,7 @@ const cvRoutes = require('./routes/cv');
 const testRoutes = require('./routes/test');
 const contactRoutes = require('./routes/contact');
 const hirePipelineRoutes = require('./routes/hirePipeline');
+const onboardingRoutes = require('./routes/onboarding');
 
 const app = express();
 
@@ -69,6 +70,7 @@ app.use('/api/cv', cvRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/hire-pipeline', hirePipelineRoutes);
+app.use('/api/onboarding', onboardingRoutes);
 
 
 // Health check endpoint

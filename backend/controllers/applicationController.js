@@ -442,11 +442,17 @@ exports.evaluateOneApplication = [verifyToken, async (req, res) => {
       application.scores = scores;
       application.rankedAt = new Date();
       await application.save();
+      
+      jobPost.evaluatedAt = new Date();
+      await jobPost.save();
     } catch (err) {
       console.error('Instant scoring failed', applicationId, err);
       application.scores = { experience: 0, projects: 0, skills: 0, certificates: 0, education: 0, languages: 0, total: 0 };
       application.rankedAt = new Date();
       await application.save();
+      
+      jobPost.evaluatedAt = new Date();
+      await jobPost.save();
     }
 
     res.json({

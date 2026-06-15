@@ -317,10 +317,12 @@ No literal rendering of these instructions as text on the poster.`;
 // Nanobanana Webhook Receiver
 exports.nanobananaWebhook = async (req, res) => {
   try {
+    const safeHeaders = { ...req.headers };
+    ['authorization', 'cookie', 'x-api-key', 'token', 'x-auth-token', 'proxy-authorization'].forEach(h => delete safeHeaders[h]);
     console.log('=== WEBHOOK RECEIVED ===');
     console.log('Method:', req.method);
     console.log('URL:', req.url);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Headers:', JSON.stringify(safeHeaders, null, 2));
     console.log('Body:', JSON.stringify(req.body, null, 2));
     console.log('Raw Body (first 500 chars):', JSON.stringify(req.body).substring(0, 500));
     console.log('========================');

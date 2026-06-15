@@ -67,10 +67,15 @@ exports.postToSocialMedia = [verifyToken, async (req, res) => {
     }
     
     // Validate that the URL doesn't point to the backend itself
-    if (n8nWebhookUrl.includes('jose-revisitable-tracee.ngrok-free.dev') && !n8nWebhookUrl.includes('5678')) {
-      console.error('⚠️  WARNING: N8N_WEBHOOK_URL appears to point to the backend server instead of n8n!');
-      console.error('   Backend ngrok URL: https://jose-revisitable-tracee.ngrok-free.dev');
-      console.error('   n8n typically runs on port 5678. Make sure you have a separate ngrok tunnel for n8n.');
+    try {
+      const backendHost = new URL(config.backend.url).host;
+      if (backendHost && n8nWebhookUrl.includes(backendHost) && !n8nWebhookUrl.includes('5678')) {
+        console.error('⚠️  WARNING: N8N_WEBHOOK_URL appears to point to the backend server instead of n8n!');
+        console.error(`   Backend URL: ${config.backend.url}`);
+        console.error('   n8n typically runs on a different port or domain. Make sure your N8N_WEBHOOK_URL points to n8n, not your backend API.');
+      }
+    } catch (_) {
+      // Fallback if config.backend.url is not a valid URL
     }
 
     // Format experience string

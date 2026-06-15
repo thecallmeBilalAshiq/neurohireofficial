@@ -50,15 +50,19 @@ function extractTextFromOutput(output) {
  * Run an OpenRouter chat completion (streaming, accumulated).
  * Returns a Bytez-compatible shape: { error, output }.
  */
-async function runLlm(messages, maxTokens) {
-  try {
+async function runLlmInternal(modelName, messages, maxTokens) {
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('OpenRouter LLM request timed out')), 45000)
+  );
+
+  const requestPromise = (async () => {
     const client = await getOpenRouterClient();
     if (!client) {
       return { error: new Error('LLM model not initialized'), output: null };
     }
 
     const chatRequest = {
-      model: OPENROUTER_MODEL,
+      model: modelName,
       messages,
       stream: true,
     };
@@ -77,10 +81,35 @@ async function runLlm(messages, maxTokens) {
     }
 
     return { error: null, output };
+  })();
+
+  try {
+    return await Promise.race([requestPromise, timeoutPromise]);
   } catch (error) {
-    console.error('OpenRouter LLM error:', error);
-    return { error, output: null };
+    console.error(`[OpenRouter] Model ${modelName} error:`, error.message || error);
+    // Return a clean error object without request/auth details
+    return { error: new Error(error.message || 'LLM request failed'), output: null };
   }
+}
+
+/**
+ * Run an OpenRouter chat completion (streaming, accumulated).
+ * Returns a Bytez-compatible shape: { error, output }.
+ * Automatically retries with fallback model on failure/timeout.
+ */
+async function runLlm(messages, maxTokens) {
+  let result = await runLlmInternal(OPENROUTER_MODEL, messages, maxTokens);
+
+  if (result.error) {
+    const fallbackModel = OPENROUTER_MODEL === 'google/gemma-2-9b-it:free'
+      ? 'meta-llama/llama-3-8b-instruct:free'
+      : 'google/gemma-2-9b-it:free';
+
+    console.warn(`[OpenRouter] Primary model ${OPENROUTER_MODEL} failed. Retrying with fallback: ${fallbackModel}`);
+    result = await runLlmInternal(fallbackModel, messages, maxTokens);
+  }
+
+  return result;
 }
 
 const LLM_UNAVAILABLE_MSG =

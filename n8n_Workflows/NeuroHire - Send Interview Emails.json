@@ -1,0 +1,97 @@
+{
+  "name": "NeuroHire - Send Interview Emails",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-interview-emails",
+        "options": {
+          "responseData": "{\"success\":true,\"message\":\"Emails queued\"}"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -128,
+        -128
+      ],
+      "id": "98ef3235-323e-47c2-a716-ee71c1deafb1",
+      "name": "Webhook",
+      "webhookId": "bffa864e-91f4-4a24-a176-d52b39ecd3cd"
+    },
+    {
+      "parameters": {
+        "jsCode": "// NeuroHire POST body is { emails, totalCount, jobInfo, sentAt }.\n// n8n Webhook puts that object on item.json.body (not at root).\nconst item = items[0];\nconst root = item?.json ?? {};\nconst body = root.body ?? root;\nconst list = body.emails;\nif (!Array.isArray(list) || list.length === 0) {\n  throw new Error('No emails[] in webhook body. Expected JSON: { emails: [{ to, subject, body }, ...] } under request body.');\n}\nreturn list.map((e) => ({ json: e }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        -128
+      ],
+      "id": "5dc4b67c-9cf5-496b-aa01-375e1eea5f83",
+      "name": "Normalize emails from body"
+    },
+    {
+      "parameters": {
+        "fromEmail": "faieztariq67@gmail.com",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        528,
+        -128
+      ],
+      "id": "3c8ac0de-7956-4cfd-bc5a-0c52506aa38e",
+      "name": "Send email",
+      "webhookId": "5598023a-5458-40ed-9a79-457560821d35",
+      "credentials": {
+        "smtp": {
+          "id": "4qkLhTai6clOw4Xr",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize emails from body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize emails from body": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "699e2549-b67f-41e2-9d80-f5f1156b57bb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5938d3d01caa954427263a0b94e352e1282cca99ce8f79fa7230e3918d289db8"
+  },
+  "id": "wOtBSVj7ppPMfGID",
+  "tags": []
+}

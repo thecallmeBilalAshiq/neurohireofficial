@@ -478,40 +478,32 @@ exports.sendInterviewEmails = async (req, res) => {
       };
     });
 
-    // Send to n8n webhook
+    // Send to n8n email batch queue (with automatic SMTP fallback)
     try {
-      const n8nResponse = await axios.post(N8N_EMAIL_WEBHOOK_URL, {
-        emails: emailsToSend,
-        totalCount: emailsToSend.length,
-        jobInfo: jobInfo,
-        sentAt: new Date().toISOString()
-      }, {
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000 // 30 second timeout
-      });
-
+      const { dispatchEmailBatch } = require('../services/emailDispatchService');
+      const batchResult = await dispatchEmailBatch(emailsToSend, jobInfo);
+      
       res.json({
         success: true,
-        message: `Successfully queued ${emailsToSend.length} email(s) for sending`,
+        message: batchResult.fallbackSmtp 
+          ? `Successfully sent ${emailsToSend.length} email(s) via SMTP fallback`
+          : `Successfully queued ${emailsToSend.length} email(s) for sending`,
         sentCount: emailsToSend.length,
-        n8nResponse: n8nResponse.data
+        n8nResponse: batchResult.n8nResponse || null,
+        fallbackSmtp: !!batchResult.fallbackSmtp
       });
     } catch (webhookError) {
-      console.error('n8n webhook error:', webhookError);
+      console.error('Email sending error:', webhookError);
       
-      // Check if n8n is not running or webhook not configured
       if (webhookError.code === 'ECONNREFUSED') {
         return res.status(503).json({
-          error: 'Email service (n8n) is not available. Please ensure n8n is running and the webhook is configured.',
-          details: 'Connection refused to n8n webhook URL',
-          webhookUrl: N8N_EMAIL_WEBHOOK_URL
+          error: 'Email service (n8n/SMTP) is not available. Please check configured credentials.',
+          details: 'Connection refused',
         });
       }
 
       return res.status(500).json({
-        error: 'Failed to send emails via n8n webhook',
+        error: 'Failed to send emails',
         details: webhookError.message
       });
     }
@@ -604,23 +596,36 @@ Requirements:
 
 Output ONLY valid JSON array, no markdown or extra text. Example format:
 [{"questionText":"What is the time complexity of binary search?","options":["O(n)","O(log n)","O(n^2)","O(1)"],"correctIndex":1}, ...]`;
-  const result = await runLlm(
-    [{ role: 'user', content: prompt }],
-    16384
-  );
-  if (result && typeof result === 'object' && result.error) {
-    console.error('MCQ pool LLM error:', result.error);
-    return { ok: false, count: 0 };
+
+  let arr = [];
+  try {
+    const result = await runLlm(
+      [{ role: 'user', content: prompt }],
+      16384
+    );
+    if (result && typeof result === 'object' && !result.error) {
+      const output = result?.output ?? result?.content ?? result?.text ?? result;
+      const text = extractTextFromOutput(output);
+      arr = parseMcqJsonFromLLM(text);
+    } else {
+      console.warn('MCQ pool LLM error: failed to generate via OpenRouter. Using static fallback questions.');
+    }
+  } catch (err) {
+    console.error('generateAndSaveMcqPool OpenRouter error:', err);
   }
-  const output = result?.output ?? result?.content ?? result?.text ?? result;
-  const text = extractTextFromOutput(output);
-  let arr = parseMcqJsonFromLLM(text);
+
   if (!Array.isArray(arr)) arr = [];
-  const questions = arr
+  let questions = arr
     .filter(q => q && q.questionText && Array.isArray(q.options) && q.options.length === 4 && typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex <= 3)
     .slice(0, 100)
     .map(q => ({ questionText: q.questionText, options: q.options, correctIndex: q.correctIndex }));
-  if (questions.length < 30) return { ok: false, count: questions.length };
+
+  if (questions.length < 30) {
+    console.warn('[llmController] LLM generated too few valid MCQs. Loading static fallback pool.');
+    const { getStaticMcqPool } = require('../utils/staticQuestionsFallback');
+    questions = getStaticMcqPool(job.jobTitle, job.skills || []);
+  }
+
   await TestMcqPool.findOneAndUpdate({ jobPost: jobId }, { jobPost: jobId, questions }, { upsert: true, new: true });
   return { ok: true, count: questions.length };
 }
@@ -665,22 +670,29 @@ Rules:
 Example format for each object: {"title":"Two Sum","statement":"Given an array of integers, return indices of two numbers that add up to target.","inputFormat":"First line: n. Second line: array. Third: target","outputFormat":"Two space-separated indices","sampleInput":"4","sampleOutput":"0 1","constraints":"2 <= n <= 10000","difficulty":"medium"}
 
 Reply with only the JSON array starting with [ and ending with ].`;
-  const result = await runLlm(
-    [{ role: 'user', content: prompt }],
-    8192
-  );
-  if (result && typeof result === 'object' && result.error) {
-    console.error('Coding questions LLM error:', result.error);
-    return { ok: false, count: 0 };
+
+  let arr = [];
+  try {
+    const result = await runLlm(
+      [{ role: 'user', content: prompt }],
+      8192
+    );
+    if (result && typeof result === 'object' && !result.error) {
+      const output = result?.output ?? result?.content ?? result?.text ?? result;
+      const text = extractTextFromOutput(output);
+      arr = parseMcqJsonFromLLM(text);
+    } else {
+      console.warn('Coding questions LLM error: failed to generate via OpenRouter. Using static fallback coding questions.');
+    }
+  } catch (err) {
+    console.error('generateAndSaveCodingQuestions OpenRouter error:', err);
   }
-  const output = result?.output ?? result?.content ?? result?.text ?? result;
-  const text = extractTextFromOutput(output);
-  let arr = parseMcqJsonFromLLM(text);
+
   if (!Array.isArray(arr)) arr = [];
-  if (arr.length === 0 && text) {
-    console.warn('Coding questions: no array parsed. Response preview:', text.slice(0, 500));
+  if (arr.length === 0) {
+    console.warn('Coding questions: no array parsed from LLM.');
   }
-  const questions = arr
+  let questions = arr
     .filter(q => q && (q.title || q.name) && (q.statement || q.description || q.problem || q.body))
     .slice(0, CODING_PROBLEM_COUNT)
     .map(q => ({
@@ -693,7 +705,13 @@ Reply with only the JSON array starting with [ and ending with ].`;
       constraints: q.constraints || '',
       difficulty: ['easy', 'medium', 'hard'].includes(q.difficulty) ? q.difficulty : 'medium',
     }));
-  if (questions.length < CODING_PROBLEM_COUNT) return { ok: false, count: questions.length };
+
+  if (questions.length < CODING_PROBLEM_COUNT) {
+    console.warn('[llmController] LLM generated too few valid coding questions. Loading static fallback coding questions.');
+    const { getStaticCodingProblems } = require('../utils/staticQuestionsFallback');
+    questions = getStaticCodingProblems();
+  }
+
   await CodingQuestion.findOneAndUpdate({ jobPost: jobId }, { jobPost: jobId, questions }, { upsert: true, new: true });
   return { ok: true, count: questions.length };
 }
@@ -859,16 +877,42 @@ Reply with ONLY a JSON object (no markdown): { "scores": [s1, s2, s3], "totalCod
 
 /**
  * Generate 3-month training plan text for a hired candidate (industry standard practices).
+ */
+function getStaticTrainingPlan(candidateName, jobTitle, company, skills) {
+  return `3-Month Training Plan - ${jobTitle}
+
+Objective:
+This training plan is designed to onboard ${candidateName} as a ${jobTitle} at ${company}. The goal is to build deep familiarity with our codebase, engineering processes, and tools, enabling independence in delivering high-quality features while aligning with our development best practices.
+
+Month 1: Orientation & Foundations (Weeks 1-4)
+- Focus: Understanding team structure, local development environment setup, mastering version control workflow (Git Flow), database architecture exploration, and key data mappings.
+- Deliverables: Configured developer workspace, successful local build/test runs, and completion of the first minor onboarding ticket / bug fix.
+
+Month 2: Core Competencies & Projects (Weeks 5-8)
+- Focus: Backend API structures, frontend component lifecycle, state management, writing unit and integration tests, and contributing to active sprint tasks.
+- Deliverables: Functional frontend dashboard component, API integration tests, and merging code with >80% test coverage.
+
+Month 3: Independence & Best Practices (Weeks 9-12)
+- Focus: CI/CD automated deployments, security auditing, performance optimizations, monitoring/logging integrations, and final project demo.
+- Deliverables: Production/staging deployment verification, completed security checklist, and a final 15-minute feature presentation to the team.
+
+Success Criteria & Milestones:
+- Week 4: Mid-month technical sync to review environment comfort.
+- Week 8: Architecture and testing standards check-in.
+- Week 12: Performance evaluation and demo presentation to transition off the formal onboarding period.`;
+}
+
+/**
  * Used for PDF export. Returns plain text or markdown.
  */
 exports.generateTrainingPlanContent = async (application, jobPost) => {
-  if (!isLlmAvailable()) return null;
   const candidateName = application.formData?.firstName && application.formData?.lastName
     ? `${application.formData.firstName} ${application.formData.lastName}`
     : application.candidate?.name || 'Candidate';
   const jobTitle = jobPost.jobTitle || 'Role';
   const company = jobPost.company || 'Company';
   const skills = (jobPost.skills && jobPost.skills.length) ? jobPost.skills.join(', ') : 'role-specific skills';
+
   const prompt = `You are an HR training specialist. Generate a 3-month (12-week) training plan for a new hire to meet industry standard practices.
 
 Candidate name: ${candidateName}
@@ -885,14 +929,23 @@ Output a clear, professional training plan with:
 6. Success criteria and review milestones
 
 Use plain text with clear headings. Keep each section concise but actionable. No markdown code blocks.`;
-  try {
-    const result = await runLlm([{ role: 'user', content: prompt }], 2048);
-    const output = result?.output ?? result?.content ?? result?.text ?? result;
-    return extractTextFromOutput(output) || 'Training plan could not be generated.';
-  } catch (e) {
-    console.error('Training plan LLM error:', e);
-    return null;
+
+  if (isLlmAvailable()) {
+    try {
+      const result = await runLlm([{ role: 'user', content: prompt }], 2048);
+      if (result && typeof result === 'object' && !result.error && result.output) {
+        const text = extractTextFromOutput(result.output);
+        if (text && text.trim() && !text.includes('"error":')) {
+          return text;
+        }
+      }
+    } catch (e) {
+      console.error('Training plan LLM error:', e);
+    }
   }
+
+  console.log('[llmController] Falling back to static 3-month training plan.');
+  return getStaticTrainingPlan(candidateName, jobTitle, company, skills);
 };
 
 // ----- HR test editor, top-50 invites, condolence (hire pipeline) -----
@@ -1048,8 +1101,18 @@ exports.sendTestInvitesTop50 = async (req, res) => {
     const TestInvitation = require('../models/TestInvitation');
     const job = await JobPost.findOne({ _id: jobId, createdBy: req.user._id });
     if (!job) return res.status(404).json({ error: 'Job post not found' });
+    const allRanked = await Application.find({ jobPost: jobId, rankedAt: { $ne: null } })
+      .populate('candidate', '_id name email')
+      .sort({ 'scores.total': -1, createdAt: 1 })
+      .lean();
+
     if (!job.evaluatedAt) {
-      return res.status(400).json({ error: 'Evaluate applications first.' });
+      if (allRanked.length > 0) {
+        job.evaluatedAt = new Date();
+        await job.save();
+      } else {
+        return res.status(400).json({ error: 'Evaluate applications first.' });
+      }
     }
     if (job.assessmentInviteSentAt) {
       return res.status(400).json({ error: 'Test invitations were already sent for this job.' });
@@ -1068,11 +1131,6 @@ exports.sendTestInvitesTop50 = async (req, res) => {
     if (!pool?.questions?.length || pool.questions.length < 30 || !coding?.questions?.length || coding.questions.length < CODING_PROBLEM_COUNT) {
       return res.status(400).json({ error: `Finalize test content (MCQ ≥30, coding ≥${CODING_PROBLEM_COUNT}) before sending invites.` });
     }
-
-    const allRanked = await Application.find({ jobPost: jobId, rankedAt: { $ne: null } })
-      .populate('candidate', '_id name email')
-      .sort({ 'scores.total': -1, createdAt: 1 })
-      .lean();
 
     if (!allRanked.length) {
       return res.status(400).json({ error: 'No ranked applications for this job.' });

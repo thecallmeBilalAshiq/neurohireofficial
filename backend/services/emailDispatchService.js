@@ -18,6 +18,47 @@ function isN8nLastNodeResponseBug(err) {
   );
 }
 
+async function sendDirectSmtp(to, subject, body) {
+  try {
+    const nodemailer = require('nodemailer');
+    const host = (process.env.SMTP_HOST || '').trim();
+    const port = parseInt(process.env.SMTP_PORT || '587', 10);
+    const secure = process.env.SMTP_SECURE === 'true' || port === 465;
+    const user = (process.env.SMTP_USER || '').trim();
+    let pass = (process.env.SMTP_PASS || '').trim();
+    if ((pass.startsWith('"') && pass.endsWith('"')) || (pass.startsWith("'") && pass.endsWith("'"))) {
+      pass = pass.slice(1, -1);
+    }
+    const from = (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
+
+    if (!host || !user || !pass || !from) {
+      console.warn('[emailDispatch] Direct SMTP credentials not fully configured in backend/.env');
+      return false;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    });
+
+    const htmlBody = body.replace(/\n/g, '<br/>');
+
+    await transporter.sendMail({
+      from: `"NeuroHire" <${from}>`,
+      to,
+      subject,
+      text: body,
+      html: `<div style="font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #333;">${htmlBody}</div>`,
+    });
+    return true;
+  } catch (err) {
+    console.error(`[emailDispatch] Failed to send email to ${to} via SMTP:`, err.message);
+    return false;
+  }
+}
+
 /**
  * Queue emails through n8n (same webhook shape as sendInterviewEmails).
  * Payload is JSON `{ emails, totalCount, jobInfo, sentAt }`. In n8n, the Webhook
@@ -48,6 +89,25 @@ async function dispatchEmailBatch(emails, jobInfo = {}) {
         n8nResponse: err.response?.data,
         assumedSuccessDueToN8nResponseBug: true,
       };
+    }
+    
+    console.warn('[emailDispatch] n8n email webhook call failed. Falling back to direct SMTP sending. Error:', err.message);
+    try {
+      let sentCount = 0;
+      for (const emailObj of emails) {
+        const ok = await sendDirectSmtp(emailObj.to, emailObj.subject, emailObj.body);
+        if (ok) sentCount++;
+      }
+      if (sentCount > 0) {
+        console.log(`[emailDispatch] Successfully sent ${sentCount} email(s) directly via SMTP fallback.`);
+        return {
+          sentCount,
+          fallbackSmtp: true,
+          message: 'n8n webhook failed; emails dispatched via direct SMTP fallback.'
+        };
+      }
+    } catch (smtpErr) {
+      console.error('[emailDispatch] Direct SMTP fallback failed:', smtpErr.message);
     }
     throw err;
   }
