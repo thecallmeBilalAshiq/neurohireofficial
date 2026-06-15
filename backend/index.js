@@ -23,9 +23,39 @@ const app = express();
 // Connect database (runs when module loads, including on Vercel serverless)
 connectDB();
 
-// CORS configuration - use centralized config
+// CORS configuration - dynamic origin validation supporting localhost, Vercel deployments, and explicitly configured frontend URLs
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5000'
+];
+
+const rawFrontendUrl = process.env.FRONTEND_URL || process.env.NEXT_PUBLIC_FRONTEND_URL;
+if (rawFrontendUrl) {
+  rawFrontendUrl.split(',').forEach(url => {
+    const trimmed = url.trim();
+    if (trimmed) {
+      allowedOrigins.push(trimmed);
+      allowedOrigins.push(trimmed.replace(/\/$/, ''));
+    }
+  });
+}
+
 app.use(cors({ 
-  origin: config.frontend.corsOrigin,
+  origin: function (origin, callback) {
+    // Allow server-to-server or local tool requests with no origin header
+    if (!origin) return callback(null, true);
+    
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      origin.endsWith('.vercel.app') || 
+                      /^http:\/\/localhost:\d+$/.test(origin);
+                      
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [

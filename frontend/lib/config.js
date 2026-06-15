@@ -7,9 +7,10 @@
 // Helper function to get API base URL
 const getApiBaseUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+    // Strip trailing slash if present
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, '');
   }
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+  const backendUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000').replace(/\/$/, '');
   return `${backendUrl}/api`;
 };
 
