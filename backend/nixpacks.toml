@@ -1,0 +1,3 @@
+# nixpacks.toml
+# Configure Nixpacks to build a multi-provider environment containing both Node.js and Python
+providers = ["node", "python"]
