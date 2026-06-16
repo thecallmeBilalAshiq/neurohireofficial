@@ -6,12 +6,86 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
+const pdfParse = require('pdf-parse');
 
 const {
   isLlmAvailable,
   runLlm,
   LLM_UNAVAILABLE_MSG,
 } = require('../services/openRouterService');
+
+// Helper function to validate CV structure natively in JavaScript
+function validateCvStructure(cvText) {
+  const cvLower = cvText.toLowerCase();
+  
+  const hasName = ['name', 'full name', 'candidate'].some(keyword => cvLower.includes(keyword));
+  const hasEmail = cvText.includes('@') || cvLower.includes('email');
+  const hasPhone = ['phone', 'mobile', 'contact', 'tel'].some(keyword => cvLower.includes(keyword));
+  const hasEducation = ['education', 'qualification', 'degree', 'university'].some(keyword => cvLower.includes(keyword));
+  const hasExperience = ['experience', 'work', 'employment', 'career'].some(keyword => cvLower.includes(keyword));
+  
+  return hasName && hasEmail && hasPhone && hasEducation && hasExperience;
+}
+
+// Helper function to extract basic info natively in JavaScript
+function extractBasicInfo(cvText) {
+  const data = {};
+  
+  // Extract email
+  const emailMatch = cvText.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
+  if (emailMatch) {
+    data.email = emailMatch[0];
+  }
+  
+  // Extract phone
+  const phoneMatch = cvText.match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+  if (phoneMatch) {
+    data.phone = phoneMatch[0];
+  }
+  
+  // Extract name
+  const nameMatch = cvText.match(/(?:name|full name)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i);
+  if (nameMatch) {
+    data.name = nameMatch[1];
+  } else {
+    const firstLine = cvText.split('\n')[0].trim();
+    if (firstLine.length > 0 && firstLine.length < 50) {
+      data.name = firstLine;
+    }
+  }
+  
+  // Extract education
+  const educationMatch = cvText.match(/(?:education|qualification)[:\s]+([\s\S]*?)(?:\n\s*\n|\n\s*(?:experience|work|skills|projects|languages))/i);
+  if (educationMatch) {
+    data.education = educationMatch[1].trim();
+  }
+  
+  // Extract experience
+  const experienceMatch = cvText.match(/(?:experience|work history|employment)[:\s]+([\s\S]*?)(?:\n\s*\n|\n\s*(?:skills|projects|education|languages))/i);
+  if (experienceMatch) {
+    data.experience = experienceMatch[1].trim();
+  }
+  
+  // Extract skills
+  const skillsMatch = cvText.match(/(?:skills|technical skills)[:\s]+([\s\S]*?)(?:\n\s*\n|\n\s*(?:languages|projects|education|experience))/i);
+  if (skillsMatch) {
+    data.skills = skillsMatch[1].trim();
+  }
+  
+  // Extract languages
+  const languagesMatch = cvText.match(/(?:languages|language)[:\s]+([\s\S]*?)(?:\n\s*\n|\n\s*(?:projects|education|experience|skills))/i);
+  if (languagesMatch) {
+    data.languages = languagesMatch[1].trim();
+  }
+  
+  // Extract projects
+  const projectsMatch = cvText.match(/(?:projects|project)[:\s]+([\s\S]*?)(?:\n\s*\n|\n\s*(?:education|experience|skills|languages))/i);
+  if (projectsMatch) {
+    data.projects = projectsMatch[1].trim();
+  }
+  
+  return data;
+}
 
 // Middleware to verify Firebase token and get user
 const verifyToken = async (req, res, next) => {
@@ -67,7 +141,7 @@ const upload = multer({
   }
 });
 
-// Check CV format using Python script
+// Check CV format using Node native PDF parser
 exports.checkCVFormat = [verifyToken, upload.single('cv'), async (req, res) => {
   try {
     if (!req.file) {
@@ -75,55 +149,49 @@ exports.checkCVFormat = [verifyToken, upload.single('cv'), async (req, res) => {
     }
 
     const cvPath = req.file.path;
-    const pythonScriptPath = path.join(__dirname, '../services/cv_checker.py');
-    const templatePath = path.join(__dirname, '../../CV_TEMPLATE.docx');
+    const cvPathAbsolute = path.resolve(cvPath);
 
-    // Call Python script to check CV format
-    // Try python3 first, then python (for cross-platform compatibility)
-    let pythonCommand = 'python3';
-    try {
-      await execPromise('python3 --version');
-    } catch {
-      pythonCommand = 'python';
+    if (!fs.existsSync(cvPathAbsolute)) {
+      return res.status(400).json({ error: 'Uploaded CV file not found' });
     }
-    
-    try {
-      const { stdout, stderr } = await execPromise(
-        `${pythonCommand} "${pythonScriptPath}" "${cvPath}" "${templatePath}"`
-      );
 
-      if (stderr && !stderr.includes('Warning')) {
-        console.error('Python script error:', stderr);
-        // Clean up uploaded file
-        fs.unlinkSync(cvPath);
-        return res.status(500).json({ error: 'Failed to process CV' });
+    try {
+      const dataBuffer = fs.readFileSync(cvPathAbsolute);
+      const data = await pdfParse(dataBuffer);
+      const cvText = data.text;
+
+      // Clean up uploaded file after reading
+      fs.unlinkSync(cvPathAbsolute);
+
+      if (!cvText || cvText.trim().length < 10) {
+        return res.json({
+          isValid: false,
+          message: 'CV file appears to be empty or could not be read. Please ensure the PDF contains text.'
+        });
       }
 
-      // Parse the JSON output from Python script
-      const result = JSON.parse(stdout.trim());
-      
-      // Clean up uploaded file after processing
-      fs.unlinkSync(cvPath);
+      // Check structure using JS helper
+      const hasRequired = validateCvStructure(cvText);
 
-      if (result.isValid) {
+      if (hasRequired) {
+        const extractedData = extractBasicInfo(cvText);
         res.json({
           isValid: true,
-          extractedData: result.extractedData,
+          extractedData: extractedData,
           message: 'CV format is valid'
         });
       } else {
         res.json({
           isValid: false,
-          message: result.message || 'CV format does not match the template'
+          message: 'CV is missing required sections (Name, Email, Phone, Education, and Experience). Please use the provided template.'
         });
       }
     } catch (error) {
-      console.error('Python script execution error:', error);
-      // Clean up uploaded file
-      if (fs.existsSync(cvPath)) {
-        fs.unlinkSync(cvPath);
+      console.error('Error processing CV format:', error);
+      if (fs.existsSync(cvPathAbsolute)) {
+        fs.unlinkSync(cvPathAbsolute);
       }
-      return res.status(500).json({ error: 'Failed to process CV. Please ensure Python and required libraries are installed.' });
+      return res.status(500).json({ error: 'Failed to process CV. Please check if the PDF contains valid readable text.' });
     }
   } catch (error) {
     console.error('Check CV format error:', error);
@@ -208,94 +276,11 @@ exports.autofillCV = [
       return res.status(400).json({ error: 'Uploaded CV file not found' });
     }
 
-    const pythonScriptPath = path.join(__dirname, '../services/cv_checker.py');
-
-    // Extract text from PDF using Python script
-    let pythonCommand = 'python3';
-    try {
-      await execPromise('python3 --version');
-    } catch {
-      pythonCommand = 'python';
-    }
-
     let cvText = '';
     try {
-      // Use Python to extract text - create inline script
-      // Convert Windows path to Python-friendly format
-      const cvPathForPython = cvPathAbsolute.replace(/\\/g, '/');
-      const servicesPath = path.join(__dirname, '../services').replace(/\\/g, '/');
-      
-      const pythonScript = `# -*- coding: utf-8 -*-
-import sys
-import os
-import io
-
-# Set UTF-8 encoding for stdout and stderr on Windows
-if sys.platform == 'win32':
-    try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    except (AttributeError, ValueError):
-        pass
-
-# Add services directory to path
-services_dir = r"${servicesPath}"
-sys.path.insert(0, services_dir)
-from cv_checker import extract_text_from_pdf
-try:
-    pdf_path = r"${cvPathForPython}"
-    if not os.path.exists(pdf_path):
-        print(f"Error: File not found: {pdf_path}", file=sys.stderr)
-        sys.exit(1)
-    text = extract_text_from_pdf(pdf_path)
-    # Clean text and output with UTF-8 encoding
-    if text:
-        # Normalize and clean text, replacing problematic characters
-        text_clean = text.encode('utf-8', errors='replace').decode('utf-8')
-        # Write directly to stdout buffer to avoid encoding issues
-        try:
-            sys.stdout.buffer.write(text_clean.encode('utf-8'))
-        except (AttributeError, ValueError):
-            # Fallback to print if buffer write fails
-            print(text_clean, end='', flush=True)
-except Exception as e:
-    error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-    print(f"Error: {error_msg}", file=sys.stderr)
-    sys.exit(1)
-`;
-      
-      // Write to temp file with UTF-8 encoding
-      const tempScript = path.join(__dirname, '../temp_extract.py');
-      fs.writeFileSync(tempScript, pythonScript, 'utf8');
-      
-      const projectRoot = path.join(__dirname, '../..');
-      // Set environment variable for UTF-8 encoding
-      const env = { ...process.env, PYTHONIOENCODING: 'utf-8' };
-      const { stdout, stderr } = await execPromise(
-        `"${pythonCommand}" "${tempScript}"`,
-        { 
-          cwd: projectRoot,
-          encoding: 'utf8',
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large PDFs
-          env: env
-        }
-      );
-      
-      // Clean up temp script
-      try {
-        if (fs.existsSync(tempScript)) {
-          fs.unlinkSync(tempScript);
-        }
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-      
-      if (stderr && !stderr.includes('Warning') && stderr.trim()) {
-        console.error('Python stderr:', stderr);
-        throw new Error(stderr);
-      }
-      
-      cvText = stdout.trim();
+      const dataBuffer = fs.readFileSync(cvPathAbsolute);
+      const data = await pdfParse(dataBuffer);
+      cvText = data.text;
     } catch (error) {
       console.error('Error extracting text from PDF:', error);
       // Clean up uploaded file
