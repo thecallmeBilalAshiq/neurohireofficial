@@ -380,7 +380,9 @@ If you encounter any issues or have questions:
 
 **NeuroHire Officials**
 
-[Frontend Team](#Muhammad_Bilal_Ashiq) • [Backend Team](#Faiez_Tariq) • [Python Team](#Bushra_Abad)
+[Frontend Team](#Bushra Abad) • [Backend Team](#Faiez_Tariq) • [Python Team](https://bilalashiq.vercel.app/)
+<br>
+[Bushra Abad](#Bushra Abad) • [Faiez Tariq](#Faiez_Tariq) • [Muhammad Bilal Ashiq](https://www.linkedin.com/in/bilal-ashiq/)
 
 *Last Updated: December 2025*
 
